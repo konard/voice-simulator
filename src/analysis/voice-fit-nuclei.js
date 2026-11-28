@@ -30,6 +30,17 @@ export function validNuclei(n) {
   );
 }
 
+function nucleiCarry(input, sampleRate) {
+  const length = Math.min(input.length, Math.round(NUCLEI_CARRY * sampleRate));
+  const offset = input.length - length;
+  const carry = new Array(length);
+  for (let i = 0; i < length; i++) {
+    const value = input[offset + i];
+    carry[i] = Math.round(Math.max(-1, Math.min(1, value)) * FULL);
+  }
+  return carry;
+}
+
 /** Adds the nuclei of `input` to `state` and returns the committed count.
  * `frames` is analyzeFrames(input) with `options`, reused without a carry. */
 export function countNuclei(state, input, sampleRate, frames, options = {}) {
@@ -62,16 +73,12 @@ export function countNuclei(state, input, sampleRate, frames, options = {}) {
       }
     }
   }
-  const keep = combined.subarray(
-    Math.max(0, combined.length - Math.round(NUCLEI_CARRY * sampleRate))
-  );
   state.nuclei += committed;
   state.landmarks = {
     sampleRate,
     pending,
-    carry: Array.from(keep, (v) =>
-      Math.round(Math.max(-1, Math.min(1, v)) * FULL)
-    ),
+    carry:
+      options.retainCarry === false ? [] : nucleiCarry(combined, sampleRate),
   };
   return committed;
 }

@@ -12,6 +12,7 @@ import { Waveguide } from '../src/acoustics/waveguide.js';
 import { planUtterance } from '../src/articulation/plan.js';
 import { teethGap } from '../src/articulation/teeth.js';
 import {
+  createTractWorkspace,
   LIP_PROTRUSION,
   sampleState,
   stretchSections,
@@ -19,6 +20,41 @@ import {
 } from '../src/articulation/tract-shape.js';
 import { STORY_FEATURES } from '../src/articulation/vowel-space.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
+
+it('reuses tract intermediates without changing published shapes', () => {
+  const workspace = createTractWorkspace();
+  const rounded = {
+    height: 0.5,
+    backness: 0.7,
+    rounding: 0.8,
+    jaw: 1.2,
+    larynxHeight: -0.4,
+  };
+  const options = { sections: 28, teeth: false };
+  const first = tractShape(rounded, DEFAULT_HEAD, options, workspace);
+  const expected = tractShape(rounded, DEFAULT_HEAD, options);
+  expect(first).toEqual(expected);
+  expect(tractShape({}, DEFAULT_HEAD, {}, workspace)).toEqual(
+    tractShape({}, DEFAULT_HEAD)
+  );
+  expect(first).toEqual(expected);
+});
+
+it('reuses the shape and control records that only the frame writer reads', () => {
+  const workspace = createTractWorkspace({ sections: 28, reuseAreas: true });
+  const options = { sections: 28 };
+  const state = { height: 0.3, f0: 160, sibilance: 0.9 };
+  const shape = tractShape(state, DEFAULT_HEAD, options, workspace);
+  expect(shape).toEqual(tractShape(state, DEFAULT_HEAD, options));
+  const { frication, glottis, teeth } = shape;
+
+  const neutral = tractShape({}, DEFAULT_HEAD, options, workspace);
+  expect(neutral).toBe(shape);
+  expect(neutral.frication).toBe(frication);
+  expect(neutral.glottis).toBe(glottis);
+  expect(neutral.teeth).toBe(teeth);
+  expect(neutral).toEqual(tractShape({}, DEFAULT_HEAD, options));
+});
 
 /** First four formants (Hz) of a tract shape: waveguide impulse response. */
 function formants(shape) {

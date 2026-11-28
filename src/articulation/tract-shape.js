@@ -12,12 +12,18 @@
 
 import { CHANNEL_DEFAULTS } from './plan.js';
 import { carveTeeth, dentition, impliedGap } from './teeth.js';
-import { LIP_PROTRUSION, VOWEL_SECTIONS, vowelShape } from './vowel-space.js';
+import {
+  createVowelWorkspace,
+  LIP_PROTRUSION,
+  VOWEL_SECTIONS,
+  vowelShape,
+} from './vowel-space.js';
 
 export { LIP_PROTRUSION };
 
 export const TRACT_SECTIONS = VOWEL_SECTIONS;
 export const NOSE_SECTIONS = 28;
+let channelNames;
 
 /** Mean length of the measured reference tracts (cm). */
 const REFERENCE_LENGTH = 17.5;
@@ -51,6 +57,23 @@ const TONGUE_ROOT_START = 2;
 const MIN_STRETCH = 0.3;
 /** Smaller changes of length (cm) leave the sections as they are. */
 const MIN_LENGTH_CHANGE = 1e-5;
+
+/** Scratch for a renderer. Frame writers can also reuse unpublished areas. */
+export function createTractWorkspace({ sections, reuseAreas = false } = {}) {
+  return {
+    full: { ...CHANNEL_DEFAULTS, time: 0 },
+    vowel: createVowelWorkspace(),
+    jaw: { scale: 1, from: 0 },
+    fit: { ratio: undefined, positions: undefined },
+    warp: { areas: null, length: 0, velum: 0, lengths: null, step: 0 },
+    lengths: sections === undefined ? undefined : new Float64Array(sections),
+    fitted: reuseAreas ? new Float64Array(sections) : undefined,
+    stretched: reuseAreas ? new Float64Array(sections) : undefined,
+    shape: reuseAreas ? { frication: {}, glottis: {}, articulators: {} } : null,
+    free: reuseAreas ? {} : undefined,
+    teeth: reuseAreas ? {} : undefined,
+  };
+}
 
 /** Nasal cavity cross-sections (cm²) from velum to nostrils. */
 const NOSE_PROFILE = Array.from({ length: NOSE_SECTIONS }, (_, index) => {
@@ -136,15 +159,16 @@ function tongueArea(state) {
  *   tongue and the lips still reach their constrictions, as they do when a
  *   bite block holds the jaw, so the factor comes before them.
  */
-export function referenceShape(state, corrections, jaw) {
-  const base = vowelShape(
-    {
-      height: state.height,
-      backness: state.backness,
-      rounded: Math.max(0, Math.min(1, state.rounding)),
-    },
-    corrections
-  );
+export function referenceShape(state, corrections, jaw, workspace) {
+  const position = workspace?.position ?? {
+    height: 0,
+    backness: 0,
+    rounded: 0,
+  };
+  position.height = state.height;
+  position.backness = state.backness;
+  position.rounded = Math.max(0, Math.min(1, state.rounding));
+  const base = vowelShape(position, corrections, workspace);
   const { areas } = base;
   if (jaw && jaw.scale !== 1) {
     const last = areas.length - 1;
@@ -206,25 +230,49 @@ function regionScale(x, head, openness) {
   return scale;
 }
 
+function prepareWarpedSamples(sections, ratio, fit) {
+  if (fit.positions?.length === sections && Object.is(fit.ratio, ratio)) {
+    return;
+  }
+  const positions = new Float64Array(sections);
+  for (let i = 0; i < sections; i++) {
+    positions[i] = warpPosition(i / (sections - 1), ratio);
+  }
+  fit.positions = positions;
+  fit.ratio = ratio;
+}
+
 /**
  * Warp a reference shape onto a head and resample it.
  * @param {{areas: Float64Array, length: number}} shape
  * @param {Record<string, number>} head Normalised head config.
  * @param {{sections?: number, openness?: number}} [options]
  */
-export function fitToHead(shape, head, options = {}) {
+export function fitToHead(shape, head, options = {}, target, positions) {
   const sections = options.sections ?? TRACT_SECTIONS;
   const openness = options.openness ?? 0.5;
-  const areas = new Float64Array(sections);
+  const areas = target ?? new Float64Array(sections);
+  const length = fitAreas(shape, head, sections, openness, areas, positions);
+  return { areas, length };
+}
+
+function fitAreas(shape, head, sections, openness, areas, positions) {
+  const original = shape.areas;
+  const ratio = head.pharynxRatio;
   for (let index = 0; index < sections; index++) {
     const x = index / (sections - 1);
-    const area = sampleLinear(shape.areas, warpPosition(x, head.pharynxRatio));
+    const position = positions ? positions[index] : warpPosition(x, ratio);
+    const scaled = position * (original.length - 1);
+    const first = Math.min(original.length - 2, Math.floor(scaled));
+    const fraction = scaled - first;
+    const area =
+      original[first] * (1 - fraction) + original[first + 1] * fraction;
     areas[index] = area * regionScale(x, head, openness);
   }
   const lipExtension = 0.5 * (head.lipThickness - 1);
-  const length =
-    (shape.length * head.vocalTractLength) / REFERENCE_LENGTH + lipExtension;
-  return { areas, length };
+  return (
+    (shape.length * head.vocalTractLength) / REFERENCE_LENGTH + lipExtension
+  );
 }
 
 /** Length of the overlap of [from, to] and [low, high]. */
@@ -243,12 +291,17 @@ function overlap(from, to, low, high) {
  *   total length (cm).
  */
 export function stretchSections(areas, lengths, sections = areas.length) {
+  const result = new Float64Array(sections);
+  const length = stretchInto(areas, lengths, sections, result);
+  return { areas: result, length };
+}
+
+function stretchInto(areas, lengths, sections, result) {
   const count = areas.length;
   let length = 0;
   for (let index = 0; index < count; index++) {
     length += lengths[index];
   }
-  const result = new Float64Array(sections);
   const step = length / sections;
   let index = 0;
   let start = 0;
@@ -268,7 +321,7 @@ export function stretchSections(areas, lengths, sections = areas.length) {
     }
     result[section] = to > from ? volume / (to - from) : areas[index];
   }
-  return { areas: result, length };
+  return length;
 }
 
 /**
@@ -277,11 +330,11 @@ export function stretchSections(areas, lengths, sections = areas.length) {
  * and the last LIP_REGION cm share them; no section gets shorter than
  * MIN_STRETCH of its length.
  */
-function stretchedLengths(count, length, larynx, lips) {
+function stretchedLengths(count, length, larynx, lips, target) {
   const step = length / count;
   const larynxRegion = Math.min(LARYNX_REGION, length);
   const lipRegion = Math.min(LIP_REGION, length);
-  const lengths = new Float64Array(count);
+  const lengths = target ?? new Float64Array(count);
   for (let index = 0; index < count; index++) {
     const from = index * step;
     const to = from + step;
@@ -310,21 +363,19 @@ function stretchedPosition(lengths, step, position) {
 }
 
 /**
- * Section index of a landmark of a tract with `count` sections: `place`
- * maps the index of the unstretched tract (as a position in cm above its
- * glottis, at the section middle) onto the stretched tract, so the landmark
- * keeps its distance from the lips when the larynx moves.
+ * Map a section's midpoint onto the stretched tract so the landmark keeps
+ * its distance from the lips when the larynx moves.
  */
-function landmarkMap(lengths, length, stretched) {
+function landmarkIndex({ lengths, length, step }, index) {
+  if (lengths === null) {
+    return index;
+  }
   const count = lengths.length;
-  const step = length / count;
-  return (index) => {
-    const position = stretchedPosition(lengths, step, (index + 0.5) * step);
-    return Math.min(
-      count - 1,
-      Math.max(0, Math.round((position / stretched) * count - 0.5))
-    );
-  };
+  const position = stretchedPosition(lengths, step, (index + 0.5) * step);
+  return Math.min(
+    count - 1,
+    Math.max(0, Math.round((position / length) * count - 0.5))
+  );
 }
 
 /**
@@ -377,11 +428,12 @@ export function noseShape(head, sections = NOSE_SECTIONS) {
 }
 
 /** Narrowest section near the active articulator. */
-function constrictionIndex(areas, state, head, place) {
+function constrictionIndex(areas, state, head, warp) {
   const lips = (state.lipAmount ?? 0) > (state.tongueAmount ?? 0);
   const location = lips ? 1 : state.tongueLocation;
   const last = areas.length - 1;
-  const center = place(
+  const center = landmarkIndex(
+    warp,
     Math.round(headPosition(location, head.pharynxRatio) * last)
   );
   let best = Math.min(last, center);
@@ -406,31 +458,28 @@ function obstacleStrength(state, teeth) {
   return (state.sibilance ?? 0) * narrow;
 }
 
-function fricationSource(areas, state, head, teeth, place) {
-  const index = constrictionIndex(areas, state, head, place);
+function fricationSource(areas, state, head, teeth, warp, target = {}) {
+  const index = constrictionIndex(areas, state, head, warp);
   const obstacle = obstacleStrength(state, teeth);
   // Sibilant jets hit the incisors: the noise starts just past them.
-  const target = obstacle > 0.5 ? Math.max(index + 1, teeth.outlet) : index + 1;
-  return {
-    index,
-    position: Math.min(areas.length - 1, target),
-    area: areas[index],
-    // The plan's frication gain; the renderer scales it by the source
-    // strength of the air flow (src/acoustics/aerodynamics.js).
-    gain: Math.max(0, state.frication ?? 0),
-    sibilance: state.sibilance ?? 0,
-    obstacle,
-  };
+  const position =
+    obstacle > 0.5 ? Math.max(index + 1, teeth.outlet) : index + 1;
+  target.index = index;
+  target.position = Math.min(areas.length - 1, position);
+  target.area = areas[index];
+  // The renderer scales the plan's gain by the strength of the air flow.
+  target.gain = Math.max(0, state.frication ?? 0);
+  target.sibilance = state.sibilance ?? 0;
+  target.obstacle = obstacle;
+  return target;
 }
 
-function applyTeeth(areas, state, head, length) {
-  const teeth = dentition(state, head, length);
+function applyTeeth(areas, state, head, length, target) {
+  const teeth = dentition(state, head, length, target);
   const last = areas.length - 1;
-  return {
-    ...teeth,
-    index: carveTeeth(areas, teeth, length),
-    outlet: Math.min(last, Math.round((teeth.end / length) * last) + 1),
-  };
+  teeth.index = carveTeeth(areas, teeth, length);
+  teeth.outlet = Math.min(last, Math.round((teeth.end / length) * last) + 1);
+  return teeth;
 }
 
 /**
@@ -444,23 +493,118 @@ function applyTeeth(areas, state, head, length) {
  * @param {Record<string, number>|null} [full] The state over
  *   CHANNEL_DEFAULTS, when the caller has it already.
  */
-export function articulatorState(state, head, full = null) {
+export function articulatorState(state, head, full = null, target = {}) {
   full ??= { ...CHANNEL_DEFAULTS, ...state };
   const expectedJaw = impliedGap(full, head);
   const rounding = Math.max(0, Math.min(1, full.rounding));
   const expectedProtrusion = rounding * LIP_PROTRUSION;
-  return {
-    jaw: Math.max(0, (state.jaw ?? expectedJaw) + (head.jawPosture ?? 0)),
-    expectedJaw,
-    lipProtrusion:
-      (state.lipProtrusion ?? expectedProtrusion) + (head.lipPosture ?? 0),
-    expectedProtrusion,
-    larynxHeight: (state.larynxHeight ?? 0) + (head.larynxPosture ?? 0),
-    tongueRoot: Math.max(
-      -1,
-      Math.min(1, (state.tongueRoot ?? 0) + (head.tongueRootPosture ?? 0))
-    ),
-  };
+  target.jaw = Math.max(0, (state.jaw ?? expectedJaw) + (head.jawPosture ?? 0));
+  target.expectedJaw = expectedJaw;
+  target.lipProtrusion =
+    (state.lipProtrusion ?? expectedProtrusion) + (head.lipPosture ?? 0);
+  target.expectedProtrusion = expectedProtrusion;
+  target.larynxHeight = (state.larynxHeight ?? 0) + (head.larynxPosture ?? 0);
+  target.tongueRoot = Math.max(
+    -1,
+    Math.min(1, (state.tongueRoot ?? 0) + (head.tongueRootPosture ?? 0))
+  );
+  return target;
+}
+
+function stateWithDefaults(state, full) {
+  if (!full) {
+    return { ...CHANNEL_DEFAULTS, time: 0, ...state };
+  }
+  // A sampled control block already supplies most channels. Write each
+  // scratch property once, while still resetting channels missing from it.
+  const enumerable = Object.prototype.propertyIsEnumerable;
+  channelNames ??= Object.keys(CHANNEL_DEFAULTS);
+  for (const name of channelNames) {
+    full[name] = enumerable.call(state, name)
+      ? state[name]
+      : CHANNEL_DEFAULTS[name];
+  }
+  full.time = enumerable.call(state, 'time') ? state.time : 0;
+  return full;
+}
+
+function warpTract(reference, head, sections, openness, free, workspace) {
+  const { lengths: lengthTarget, fitted, stretched, fit } = workspace;
+  if (fit) {
+    prepareWarpedSamples(sections, head.pharynxRatio, fit);
+  }
+  const areas =
+    fitted?.length === sections ? fitted : new Float64Array(sections);
+  const length = fitAreas(
+    reference,
+    head,
+    sections,
+    openness,
+    areas,
+    fit?.positions
+  );
+  const count = areas.length;
+  const velum = Math.round(
+    ((count - 1) * head.pharynxRatio * VELUM_POSITION) / REFERENCE_PHARYNX
+  );
+  applyTongueRoot(areas, length, velum, free.tongueRoot, head.tongueRootArea);
+  // Each change of length goes to the place of its organ; landmarks keep
+  // their distance from the lips. With Float32 channels, a protrusion
+  // that follows rounding may still differ by about 1e-8 cm.
+  const larynx = -free.larynxHeight;
+  const lips = free.lipProtrusion - free.expectedProtrusion;
+  const warp = workspace.warp ?? {};
+  warp.areas = areas;
+  warp.length = length;
+  warp.velum = velum;
+  warp.lengths = null;
+  warp.step = 0;
+  if (
+    Math.abs(larynx) > MIN_LENGTH_CHANGE ||
+    Math.abs(lips) > MIN_LENGTH_CHANGE
+  ) {
+    const lengths = stretchedLengths(
+      count,
+      length,
+      larynx,
+      lips,
+      lengthTarget?.length === count ? lengthTarget : undefined
+    );
+    const equal =
+      stretched?.length === count ? stretched : new Float64Array(count);
+    warp.areas = equal;
+    warp.lengths = lengths;
+    warp.step = length / count;
+    warp.length = stretchInto(areas, lengths, count, equal);
+  }
+  return warp;
+}
+
+function glottisShape(state, target = {}) {
+  target.f0 = state.f0;
+  target.voicing = state.voicing;
+  target.aspiration = state.aspiration;
+  target.closure = state.glottalClosure;
+  target.loudness = state.loudness;
+  target.lungPressure = state.lungPressure;
+  target.adduction = state.adduction;
+  target.foldTension = state.foldTension;
+  target.effort = state.effort ?? 0;
+  target.tension = state.tension ?? 0;
+  target.breath = state.breath ?? 0;
+  target.creak = state.creak ?? 0;
+  target.falsetto = state.falsetto ?? 0;
+  target.harsh = state.harsh ?? 0;
+  target.whisper = state.whisper ?? 0;
+  return target;
+}
+
+function copyArticulators(free, target = {}) {
+  target.jaw = free.jaw;
+  target.lipProtrusion = free.lipProtrusion;
+  target.larynxHeight = free.larynxHeight;
+  target.tongueRoot = free.tongueRoot;
+  return target;
 }
 
 /**
@@ -471,9 +615,9 @@ export function articulatorState(state, head, full = null) {
  *   `teeth: false` leaves out the incisors (constriction and obstacle noise
  *   source); `vowelCorrections` overrides the vowel calibration.
  */
-export function tractShape(state, head, options = {}) {
-  const full = { ...CHANNEL_DEFAULTS, time: 0, ...state };
-  const free = articulatorState(state, head, full);
+export function tractShape(state, head, options = {}, workspace = {}) {
+  const full = stateWithDefaults(state, workspace.full);
+  const free = articulatorState(state, head, full, workspace.free);
   full.jaw = free.jaw;
   // The mouth from x = 0.55 of the head's tract on; the lower lip rides
   // on the jaw, so the lip opening follows it too. While the tongue or the
@@ -483,90 +627,54 @@ export function tractShape(state, head, options = {}) {
     engagement(full.tongueAmount),
     engagement(full.lipAmount)
   );
-  const reference = referenceShape(full, options.vowelCorrections, {
-    scale:
-      1 + (jawScale(free.jaw, free.expectedJaw, head.jawArea) - 1) * (1 - held),
-    from: warpPosition(JAW_START, head.pharynxRatio),
-  });
+  const jaw = workspace.jaw ?? { scale: 1, from: 0 };
+  jaw.scale =
+    1 + (jawScale(free.jaw, free.expectedJaw, head.jawArea) - 1) * (1 - held);
+  jaw.from = warpPosition(JAW_START, head.pharynxRatio);
+  const reference = referenceShape(
+    full,
+    options.vowelCorrections,
+    jaw,
+    workspace.vowel
+  );
   const openness = Math.max(0, Math.min(1, 1 - full.height));
-  const fitted = fitToHead(reference, head, {
-    sections: options.sections,
+  const warp = warpTract(
+    reference,
+    head,
+    options.sections ?? TRACT_SECTIONS,
     openness,
-  });
-  let { areas, length } = fitted;
-  const restVelum = Math.round(
-    ((areas.length - 1) * head.pharynxRatio * VELUM_POSITION) /
-      REFERENCE_PHARYNX
+    free,
+    workspace
   );
-  applyTongueRoot(
-    areas,
-    length,
-    restVelum,
-    free.tongueRoot,
-    head.tongueRootArea
-  );
-  // Each change of length goes to the place of its organ; landmarks keep
-  // their distance from the lips.
-  const larynx = -free.larynxHeight;
-  const lips = free.lipProtrusion - free.expectedProtrusion;
-  let place = (index) => index;
-  // The channels are Float32Array: a protrusion that follows the rounding
-  // differs from rounding * LIP_PROTRUSION by about 1e-8 cm.
-  if (
-    Math.abs(larynx) > MIN_LENGTH_CHANGE ||
-    Math.abs(lips) > MIN_LENGTH_CHANGE
-  ) {
-    const lengths = stretchedLengths(areas.length, length, larynx, lips);
-    const stretched = stretchSections(areas, lengths, areas.length);
-    place = landmarkMap(lengths, length, stretched.length);
-    ({ areas, length } = stretched);
-  }
+  const { areas, length, velum } = warp;
   const teeth =
-    options.teeth === false ? null : applyTeeth(areas, full, head, length);
-  return {
+    options.teeth === false
+      ? null
+      : applyTeeth(areas, full, head, length, workspace.teeth);
+  const shape = workspace.shape ?? {};
+  shape.areas = areas;
+  shape.length = length;
+  shape.velumArea =
+    MAX_VELUM_AREA *
+    Math.max(0, Math.min(1, full.velum)) *
+    (head.nasalCoupling ?? 1);
+  shape.velumIndex = landmarkIndex(warp, velum);
+  shape.frication = fricationSource(
     areas,
-    length,
-    velumArea:
-      MAX_VELUM_AREA *
-      Math.max(0, Math.min(1, full.velum)) *
-      (head.nasalCoupling ?? 1),
-    velumIndex: place(restVelum),
-    frication: fricationSource(areas, full, head, teeth, place),
-    glottis: {
-      f0: full.f0,
-      voicing: full.voicing,
-      aspiration: full.aspiration,
-      closure: full.glottalClosure,
-      loudness: full.loudness,
-      lungPressure: full.lungPressure,
-      adduction: full.adduction,
-      foldTension: full.foldTension,
-      effort: full.effort ?? 0,
-      tension: full.tension ?? 0,
-      breath: full.breath ?? 0,
-      creak: full.creak ?? 0,
-      falsetto: full.falsetto ?? 0,
-      harsh: full.harsh ?? 0,
-      whisper: full.whisper ?? 0,
-    },
-    lipOpening: areas.at(-1),
-    jaw: openness,
-    /**
-     * The free articulators with the head's postures (articulatorState()):
-     * incisor gap, lip protrusion and larynx height in cm, tongue root.
-     */
-    articulators: {
-      jaw: free.jaw,
-      lipProtrusion: free.lipProtrusion,
-      larynxHeight: free.larynxHeight,
-      tongueRoot: free.tongueRoot,
-    },
+    full,
+    head,
     teeth,
-    /**
-     * Lateral channel (0..1): at 1 the tongue blocks the middle of the
-     * tract at the constriction and the air passes beside it ([l]); only
-     * the 2D sheet (sheet-model.js) has a width to show that.
-     */
-    lateral: Math.max(0, Math.min(1, full.lateral ?? 0)),
-  };
+    warp,
+    shape.frication
+  );
+  shape.glottis = glottisShape(full, shape.glottis);
+  shape.lipOpening = areas.at(-1);
+  shape.jaw = openness;
+  // Incisor gap, lip protrusion, larynx height (cm), and tongue root.
+  shape.articulators = copyArticulators(free, shape.articulators);
+  shape.teeth = teeth;
+  // At 1 the tongue blocks the middle of the tract and air passes beside it.
+  // Only the 2D sheet has a width to show the lateral channel.
+  shape.lateral = Math.max(0, Math.min(1, full.lateral ?? 0));
+  return shape;
 }

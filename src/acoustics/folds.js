@@ -229,6 +229,71 @@ function clampTension(value) {
   return Math.min(MAX_FOLD_TENSION, Math.max(MIN_FOLD_TENSION, value));
 }
 
+function setTension(folds, q) {
+  if (q === folds.tension) {
+    return;
+  }
+  folds.tension = q;
+  const stiffness = q * folds.stiffnessFactor;
+  const mass = folds.massFactor / q;
+  const damping = folds.dampingFactor / q;
+  folds.m1 = FOLD_MASS_1 * mass;
+  folds.m2 = FOLD_MASS_2 * mass;
+  folds.k1 = FOLD_STIFFNESS_1 * stiffness;
+  folds.k2 = FOLD_STIFFNESS_2 * stiffness;
+  folds.kc = FOLD_COUPLING * stiffness;
+  folds.r1 = FOLD_DAMPING_1 * damping;
+  folds.r2 = FOLD_DAMPING_2 * damping;
+  // Collision springs act on the area: c_i a_i / (2 L).
+  folds.c1 = (FOLD_COLLISION * folds.k1) / (2 * folds.length);
+  folds.c2 = (FOLD_COLLISION * folds.k2) / (2 * folds.length);
+}
+
+/** Advance at fixed pressure and rest area. Calibration records the tail
+ * directly, while the renderer uses the final area for its source sample. */
+function unloadedMotion(folds, dt, pressure, a02, flow, samples = 1) {
+  const { length, steps, r1, r2, k1, k2, kc, c1, c2, m1, m2 } = folds;
+  const a01 = a02 + REST_CONVERGENCE;
+  const twoL = 2 * length;
+  const drive = length * FOLD_THICKNESS_1 * pressure;
+  const h = dt / steps;
+  const speed = flow ? Math.sqrt((2 * pressure) / AIR_DENSITY) : 0;
+  const window = flow?.length ?? 0;
+  let { x1, x2, v1, v2 } = folds;
+  for (let sample = window - samples; sample < window; sample++) {
+    for (let index = 0; index < steps; index++) {
+      const a1 = a01 + twoL * x1;
+      const a2 = a02 + twoL * x2;
+      let f1 = -r1 * v1 - k1 * x1 - kc * (x1 - x2);
+      let f2 = -r2 * v2 - k2 * x2 - kc * (x2 - x1);
+      if (a1 > 0) {
+        const ratio = Math.max(0, Math.min(a1, a2)) / a1;
+        f1 += drive * (1 - ratio * ratio);
+      } else {
+        // Closed below: the full lung pressure acts on the lower mass.
+        f1 += drive - c1 * a1;
+      }
+      if (a2 < 0) {
+        f2 -= c2 * a2;
+      }
+      // Semi-implicit Euler: velocities first, then positions.
+      v1 += (h * f1) / m1;
+      v2 += (h * f2) / m2;
+      x1 += h * v1;
+      x2 += h * v2;
+    }
+    if (sample >= 0) {
+      flow[sample] =
+        Math.max(0, Math.min(a01 + twoL * x1, a02 + twoL * x2)) * speed;
+    }
+  }
+  folds.x1 = x1;
+  folds.x2 = x2;
+  folds.v1 = v1;
+  folds.v2 = v2;
+  return Math.max(0, Math.min(a01 + twoL * x1, a02 + twoL * x2));
+}
+
 export class VocalFolds {
   /**
    * @param {{breathiness?: number, aspirationLevel?: number, foldLength?: number, foldMass?: number, foldStiffness?: number, foldDamping?: number, glottalPressureCoefficient?: number, breathGain?: number, breathExponent?: number, reCritical?: number, rate?: number}} [options]
@@ -277,26 +342,6 @@ export class VocalFolds {
     return this.u;
   }
 
-  #setTension(q) {
-    if (q === this.tension) {
-      return;
-    }
-    this.tension = q;
-    const stiffness = q * this.stiffnessFactor;
-    const mass = this.massFactor / q;
-    const damping = this.dampingFactor / q;
-    this.m1 = FOLD_MASS_1 * mass;
-    this.m2 = FOLD_MASS_2 * mass;
-    this.k1 = FOLD_STIFFNESS_1 * stiffness;
-    this.k2 = FOLD_STIFFNESS_2 * stiffness;
-    this.kc = FOLD_COUPLING * stiffness;
-    this.r1 = FOLD_DAMPING_1 * damping;
-    this.r2 = FOLD_DAMPING_2 * damping;
-    // Collision springs act on the area: c_i a_i / (2 L).
-    this.c1 = (FOLD_COLLISION * this.k1) / (2 * this.length);
-    this.c2 = (FOLD_COLLISION * this.k2) / (2 * this.length);
-  }
-
   /**
    * Low-pass the open area through MEAN_AREA_STAGES one-pole stages; the
    * first step after a reset starts them at the rest area.
@@ -337,7 +382,7 @@ export class VocalFolds {
    */
   step(dt, control, noise, load) {
     const closure = control.closure;
-    this.#setTension(clampTension(control.foldTension));
+    setTension(this, clampTension(control.foldTension));
     if (control.adduction !== this.adduction) {
       this.adduction = control.adduction;
       this.targetArea = restArea(control.adduction);
@@ -363,45 +408,21 @@ export class VocalFolds {
     }
     const pressure = this.pressure;
     const a02 = this.a02;
-    const a01 = a02 + REST_CONVERGENCE;
-    const twoL = 2 * this.length;
     if (load) {
       const oral = Math.max(0, control.oralPressure ?? 0) * (1 - closure);
       this.oralPressure = this.started
         ? this.oralPressure + this.follow * (oral - this.oralPressure)
         : oral;
-      return this.#stepLoaded(dt, control, noise, load, a01, a02);
+      return this.#stepLoaded(
+        dt,
+        control,
+        noise,
+        load,
+        a02 + REST_CONVERGENCE,
+        a02
+      );
     }
-    const drive = this.length * FOLD_THICKNESS_1 * pressure;
-    const steps = this.steps;
-    const h = dt / steps;
-    let { x1, x2, v1, v2 } = this;
-    for (let index = 0; index < steps; index++) {
-      const a1 = a01 + twoL * x1;
-      const a2 = a02 + twoL * x2;
-      let f1 = -this.r1 * v1 - this.k1 * x1 - this.kc * (x1 - x2);
-      let f2 = -this.r2 * v2 - this.k2 * x2 - this.kc * (x2 - x1);
-      if (a1 > 0) {
-        const ratio = Math.max(0, Math.min(a1, a2)) / a1;
-        f1 += drive * (1 - ratio * ratio);
-      } else {
-        // Closed below: the full lung pressure acts on the lower mass.
-        f1 += drive - this.c1 * a1;
-      }
-      if (a2 < 0) {
-        f2 -= this.c2 * a2;
-      }
-      // Semi-implicit Euler: velocities first, then positions.
-      v1 += (h * f1) / this.m1;
-      v2 += (h * f2) / this.m2;
-      x1 += h * v1;
-      x2 += h * v2;
-    }
-    this.x1 = x1;
-    this.x2 = x2;
-    this.v1 = v1;
-    this.v2 = v2;
-    const area = Math.max(0, Math.min(a01 + twoL * x1, a02 + twoL * x2));
+    const area = unloadedMotion(this, dt, pressure, a02);
     const flow = area * Math.sqrt((2 * pressure) / AIR_DENSITY);
     // The first step after a reset sets the flow without a jump to it.
     const previous = this.started ? this.u : flow;
@@ -537,8 +558,8 @@ export class VocalFolds {
 /** Measured pitch (Hz) of a flow: upward zero crossings of U - mean(U). */
 export function flowPitch(flow, sampleRate) {
   let mean = 0;
-  for (const value of flow) {
-    mean += value;
+  for (let i = 0; i < flow.length; i++) {
+    mean += flow[i];
   }
   mean /= flow.length;
   let first = -1;
@@ -593,26 +614,28 @@ function foldOptions(head) {
  * @param {{duration?: number, window?: number, adduction?: number, rate?: number}} [options]
  */
 export function foldPitch(pressure, tension, head = {}, options = {}) {
+  return measureFoldPitch(pressure, tension, foldOptions(head), options);
+}
+
+function measureFoldPitch(pressure, tension, head, options = {}, scratch) {
   const rate = options.rate ?? FOLD_RATE;
-  const folds = new VocalFolds({ ...foldOptions(head), rate });
-  const control = {
-    voicing: 1,
-    aspiration: 0,
-    closure: 0,
-    loudness: 1,
-    lungPressure: pressure,
-    adduction: options.adduction ?? TABLE_ADDUCTION,
-    foldTension: tension,
-  };
   const total = Math.round((options.duration ?? TABLE_DURATION) * rate);
-  const window = Math.round((options.window ?? TABLE_WINDOW) * rate);
-  const flow = new Float64Array(window);
-  for (let index = 0; index < total; index++) {
-    folds.step(1 / rate, control, 0);
-    if (index >= total - window) {
-      flow[index - total + window] = folds.flow;
-    }
-  }
+  const adduction = options.adduction ?? TABLE_ADDUCTION;
+  const flow =
+    scratch ??
+    new Float64Array(Math.round((options.window ?? TABLE_WINDOW) * rate));
+  const folds = new VocalFolds({ ...head, rate });
+  const dt = 1 / rate;
+  folds.steps = Math.max(1, Math.ceil(dt * rate));
+  setTension(folds, clampTension(tension));
+  unloadedMotion(
+    folds,
+    dt,
+    Math.max(0, pressure) * PASCAL,
+    restArea(adduction),
+    flow,
+    total
+  );
   return flowPitch(flow, rate);
 }
 
@@ -622,9 +645,10 @@ function pitchTable(head) {
   const key = Object.values(options).join(':');
   let table = tableCache.get(key);
   if (!table) {
+    const flow = new Float64Array(Math.round(TABLE_WINDOW * FOLD_RATE));
     table = TENSION_TABLE_PRESSURES.map((pressure) =>
       TENSION_TABLE_TENSIONS.map((tension) =>
-        foldPitch(pressure, tension, options)
+        measureFoldPitch(pressure, tension, options, undefined, flow)
       )
     );
     if (tableCache.size >= TABLE_CACHE_SIZE) {

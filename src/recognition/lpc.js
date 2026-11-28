@@ -152,6 +152,11 @@ export function lpcBurg(x, order, a, k) {
  */
 export function lpcAutocorrelation(x, order, a, k) {
   const length = checkOrder(x, order, a, k);
+  return lpcAutocorrelationPrefix(x, order, a, k, length);
+}
+
+/** Autocorrelation for a validated workspace with a known active length. */
+export function lpcAutocorrelationPrefix(x, order, a, k, length) {
   if (length === 0) {
     clear(a, k, order);
     return 0;

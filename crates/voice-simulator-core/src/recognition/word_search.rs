@@ -1,9 +1,10 @@
 //! Approximate pronunciation-trie traversal (Unlicense).
-//! Nodes are numbered in insertion order. child_offsets contains N+1
-//! offsets into children, whose entries are node IDs. feature indexes the
-//! substitution matrix column of each node. gaps contains insertion costs
-//! per node. Each input row contains deletion cost followed by substitution
-//! costs in feature order. The result is (end, node, cost) for each frontier.
+//! child_offsets contains N+1 offsets. An explicit layout gives the node
+//! IDs, features, terminal flags and gaps separately. The packed layout
+//! uses breadth-first node IDs, combines each feature and terminal flag,
+//! and stores gaps by feature. Each input row contains deletion cost followed
+//! by substitution costs in feature order. The result is (end, node, cost)
+//! for each frontier.
 //! The first index in the generated candidate list wins on equal cost.
 
 use alloc::vec::Vec;
@@ -89,7 +90,7 @@ impl SearchScratch {
             };
             for state in &self.frontier {
                 for node in trie.children(state.node)? {
-                    let cost = state.cost + trie.gaps.get(node)?;
+                    let cost = state.cost + trie.gap(node)?;
                     if cost <= limit && cost < cutoff && cost < self.old[node] {
                         self.next.push(State::new(node, cost));
                     }
@@ -121,12 +122,46 @@ impl SearchScratch {
 impl Trie<'_> {
     fn children(&self, node: usize) -> Option<impl Iterator<Item = usize> + '_> {
         let offsets = self.child_offsets.get(node..node + 2)?;
-        Some(
-            self.children
-                .get(offsets[0] as usize..offsets[1] as usize)?
-                .iter()
-                .map(|&id| id as usize),
-        )
+        let range = offsets[0] as usize..offsets[1] as usize;
+        let ids = if self.packed() {
+            if range.start > range.end || range.end >= self.feature.len() {
+                return None;
+            }
+            None
+        } else {
+            Some(self.children.get(range.clone())?)
+        };
+        Some(range.enumerate().map(move |(i, slot)| match ids {
+            Some(ids) => ids[i] as usize,
+            None => slot + 1,
+        }))
+    }
+
+    fn packed(&self) -> bool {
+        self.terminal.is_empty()
+    }
+
+    fn column(&self, node: usize) -> Option<usize> {
+        let feature = *self.feature.get(node)?;
+        Some((if self.packed() { feature >> 1 } else { feature }) as usize)
+    }
+
+    fn gap(&self, node: usize) -> Option<f64> {
+        self.gaps
+            .get(if self.packed() {
+                self.column(node)?
+            } else {
+                node
+            })
+            .copied()
+    }
+
+    fn terminal(&self, node: usize) -> bool {
+        if self.packed() {
+            self.feature[node] & 1 != 0
+        } else {
+            self.terminal[node] != 0
+        }
     }
 
     pub fn search(
@@ -140,8 +175,8 @@ impl Trie<'_> {
         if stride < 2
             || beam == 0
             || nodes == 0
-            || self.gaps.len() != nodes
-            || self.terminal.len() != nodes
+            || (self.packed() && (!self.children.is_empty() || self.gaps.len() != stride - 1))
+            || (!self.packed() && (self.gaps.len() != nodes || self.terminal.len() != nodes))
         {
             return None;
         }
@@ -182,7 +217,7 @@ impl Trie<'_> {
                     });
                 }
                 for node in self.children(state.node)? {
-                    let column = *self.feature.get(node)? as usize;
+                    let column = self.column(node)?;
                     let cost = state.cost + row[1..].get(column)?;
                     if cost <= limit {
                         scratch.next.push(State::new(node, cost));
@@ -193,7 +228,7 @@ impl Trie<'_> {
             core::mem::swap(&mut scratch.states, &mut scratch.next);
             scratch.insertions(limit, beam, self)?;
             for state in &scratch.states {
-                if self.terminal[state.node] != 0 {
+                if self.terminal(state.node) {
                     result.extend([(index + 1) as f64, state.node as f64, state.cost]);
                 }
             }
@@ -220,6 +255,17 @@ mod tests {
         assert_eq!(
             trie.search(&input, 3, 1, &mut scratch).unwrap(),
             [1.0, 1.0, 0.2]
+        );
+        let packed = Trie {
+            children: &[],
+            feature: &[0, 1, 3],
+            gaps: &[1.0, 1.0],
+            terminal: &[],
+            ..trie
+        };
+        assert_eq!(
+            packed.search(&input, 3, 1, &mut scratch),
+            trie.search(&input, 3, 1, &mut scratch)
         );
         let invalid = Trie {
             children: &[1, 3],

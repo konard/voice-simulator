@@ -2,6 +2,9 @@
 import { installLanguageModelReader } from './language-model.js';
 import { installPreparedLexicons } from './lexicon.js';
 import { openPreparedLexicon } from './prepared-lexicon.js';
+import { HMM_MAX_WORDS, installPreparedHmm } from './hmm-network.js';
+import { openHmmArchive } from './hmm-archive.js';
+import { installPreparedModeBaselines } from './mode-baseline.js';
 import {
   installWordTransitionReader,
   openWordTransitions,
@@ -16,10 +19,22 @@ import {
 } from './codebook-data.js';
 
 export const recognitionModelVersion = 2;
+export const preparedLexiconVersion = 3;
 
 export const recognitionDataFile = (kind) =>
   new globalThis.URL(
-    `../engine/voice-simulator-recognition-${kind}.json.gz`,
+    `../engine/voice-simulator-recognition-${kind}.${kind === 'models' ? 'json' : 'bin'}.gz`,
+    import.meta.url
+  );
+
+export const hmmNetworkVersion = 4;
+const previousHmmArchiveVersion = 3;
+const serializedHmmVersion = 2;
+const hasSupplementalWords = (language, maxWords) =>
+  language === 'en' && maxWords === HMM_MAX_WORDS;
+export const hmmNetworkFile = (language, maxWords = HMM_MAX_WORDS) =>
+  new globalThis.URL(
+    `../engine/voice-simulator-hmm-${language}${maxWords === HMM_MAX_WORDS ? '' : `-${maxWords}`}.bin.gz`,
     import.meta.url
   );
 
@@ -27,6 +42,13 @@ export const wordTransitionVersion = 1;
 export const wordTransitionFile = (language) =>
   new globalThis.URL(
     `../engine/voice-simulator-word-transitions-${language}.bin.gz`,
+    import.meta.url
+  );
+
+export const modeBaselineVersion = 1;
+export const modeBaselineFile = () =>
+  new globalThis.URL(
+    '../engine/voice-simulator-recognition-modes.bin.gz',
     import.meta.url
   );
 
@@ -101,6 +123,68 @@ export function packLanguageModel({ singles, pairs, triples, total }) {
   ];
 }
 
+function configurePreparedHmm(readAsset, v8) {
+  const hmmSizes = new Map();
+  installPreparedHmm(
+    (language, maxWords) => {
+      try {
+        const bytes = readAsset(hmmNetworkFile(language, maxWords));
+        const archive = openHmmArchive(
+          bytes,
+          hmmNetworkVersion,
+          v8.deserialize
+        );
+        if (archive) {
+          return archive;
+        }
+        if (hasSupplementalWords(language, maxWords)) {
+          return undefined;
+        }
+        const previous = openHmmArchive(
+          bytes,
+          previousHmmArchiveVersion,
+          v8.deserialize
+        );
+        if (previous) {
+          return previous;
+        }
+        const [version, network] = v8.deserialize(bytes);
+        return version === serializedHmmVersion ? network : undefined;
+      } catch {
+        // Source installations can build the same network on demand.
+      }
+    },
+    (language, maxWords) => {
+      if (!hmmSizes.has(maxWords)) {
+        hmmSizes.set(maxWords, {});
+        try {
+          const [version, sizes] = JSON.parse(
+            readAsset(hmmNetworkFile('index', maxWords)).toString()
+          );
+          if (
+            (version === hmmNetworkVersion ||
+              version === previousHmmArchiveVersion ||
+              version === serializedHmmVersion) &&
+            typeof sizes === 'object' &&
+            sizes
+          ) {
+            hmmSizes.set(maxWords, { version, sizes });
+          }
+        } catch {
+          // Older installations grow the same columns as assets arrive.
+        }
+      }
+      const { version, sizes } = hmmSizes.get(maxWords);
+      if (
+        version === hmmNetworkVersion ||
+        !hasSupplementalWords(language, maxWords)
+      ) {
+        return sizes?.[language];
+      }
+    }
+  );
+}
+
 export function configureNodeRecognitionModels() {
   if (configured) {
     return;
@@ -112,11 +196,20 @@ export function configureNodeRecognitionModels() {
   if (!fs || !zlib) {
     return;
   }
+  function readAsset(file) {
+    const compressed = fs.readFileSync(file);
+    // The packaged files have one gzip member. Its footer gives the output
+    // length, so zlib can return one buffer without concatenating chunks.
+    const length = compressed.readUInt32LE(compressed.length - 4);
+    const chunkSize = Math.max(
+      16 * 1024,
+      Math.min(8 * 1024 * 1024, length + 1)
+    );
+    return zlib.gunzipSync(compressed, { chunkSize });
+  }
   installWordTransitionReader((language, words) => {
     try {
-      const bytes = zlib.gunzipSync(
-        fs.readFileSync(wordTransitionFile(language))
-      );
+      const bytes = readAsset(wordTransitionFile(language));
       const header = 2 * Uint32Array.BYTES_PER_ELEMENT;
       if (process.getBuiltinModule('node:os').endianness() === 'BE') {
         return undefined;
@@ -163,10 +256,32 @@ export function configureNodeRecognitionModels() {
     }
   });
   function read(kind) {
-    const file = fs.readFileSync(recognitionDataFile(kind));
-    const [version, rows] = JSON.parse(zlib.gunzipSync(file).toString());
-    return version === recognitionModelVersion ? rows : undefined;
+    const bytes = readAsset(recognitionDataFile(kind));
+    const [version, rows] =
+      kind === 'models' ? JSON.parse(bytes.toString()) : v8.deserialize(bytes);
+    return version === recognitionModelVersion ||
+      (kind !== 'models' && version === preparedLexiconVersion)
+      ? rows
+      : undefined;
   }
+  const v8 = process.getBuiltinModule('node:v8');
+  let modeBaselines;
+  installPreparedModeBaselines((key) => {
+    if (!modeBaselines) {
+      modeBaselines = new Map();
+      try {
+        const [version, rows] = v8.deserialize(readAsset(modeBaselineFile()));
+        if (version === modeBaselineVersion && rows instanceof Map) {
+          modeBaselines = rows;
+        }
+      } catch {
+        // Source installations can measure these references on demand.
+      }
+    }
+    const row = modeBaselines.get(key);
+    return row && globalThis.structuredClone(row);
+  });
+  configurePreparedHmm(readAsset, v8);
   installPreparedLexicons((language, words) => {
     try {
       const rows = read(language);

@@ -14,6 +14,7 @@
  */
 
 import {
+  createTractWorkspace,
   sampleState,
   tractShape,
   noseShape,
@@ -180,6 +181,7 @@ const SOLVERS = new Map([
   ['fdtd2d', (options) => new Fdtd2d(options)],
   ['fdtd3d', (options) => new Fdtd3d(options)],
 ]);
+const BUILTIN_SOLVERS = new Set(SOLVERS.values());
 
 /**
  * Register an acoustic solver factory.
@@ -214,13 +216,14 @@ export function noseSections(head, sections) {
  * @param {object} head Normalized head.
  * @param {{sections: number, teeth: boolean, vowelCorrections?: object}} options
  */
-export function blockShape(plan, time, state, head, options) {
+export function blockShape(plan, time, state, head, options, workspace) {
   sampleState(plan, time, state);
-  return tractShape(state, head, options);
+  return tractShape(state, head, options, workspace);
 }
 
 /** Marks an internal plan whose tract can be computed once per renderer. */
 export const STEADY_TRACT = Symbol('steadyTract');
+const OFFLINE_WAVEGUIDE = Symbol('offlineWaveguide');
 
 export class NoiseSources {
   constructor(seed) {
@@ -341,18 +344,20 @@ export class OutputStage {
   }
 
   filter(value) {
+    const { lowpass } = this;
     let result = value;
-    for (const filter of this.lowpass) {
-      result = filter.process(result);
+    for (let index = 0; index < lowpass.length; index++) {
+      result = lowpass[index].process(result);
     }
     return result;
   }
 
   finish(input) {
+    const { band } = this;
     let value = input;
-    if (this.band) {
-      for (const filter of this.band) {
-        value = filter.process(value);
+    if (band) {
+      for (let index = 0; index < band.length; index++) {
+        value = band[index].process(value);
       }
     }
     const output = value - this.dcInput + this.dcCoefficient * this.dcOutput;
@@ -363,6 +368,12 @@ export class OutputStage {
 }
 
 export class VoiceRenderer {
+  #tract;
+  #shapeOptions = { sections: 0, teeth: true, vowelCorrections: undefined };
+  #builtinSolver;
+  #waveguideInputs;
+  #airflowScratch;
+
   /**
    * @param {object} plan Result of planUtterance.
    * `microphone` ({distance, azimuth, elevation, compensate}, cm and
@@ -431,6 +442,8 @@ export class VoiceRenderer {
     this.#prepareInteraction(options);
     this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
     this.glottis = source(this.head, seed);
+    this.#builtinSolver = BUILTIN_SOLVERS.has(factory);
+    this.#prepareTract(options);
     this.noise = new NoiseSources(seed);
     this.aerodynamics = new Aerodynamics({
       compliance: this.head.oralCompliance,
@@ -481,6 +494,23 @@ export class VoiceRenderer {
   #seek(seconds) {
     this.position = Math.round((seconds ?? 0) * this.sampleRate);
     this.time = this.position / this.sampleRate;
+  }
+
+  #prepareTract(options) {
+    // The built-in waveguide copies its inputs during setShape.
+    const offlineWaveguide =
+      options[OFFLINE_WAVEGUIDE] &&
+      this.#builtinSolver &&
+      this.solver instanceof Waveguide;
+    this.#tract = createTractWorkspace({
+      sections: this.sections,
+      reuseAreas: offlineWaveguide,
+    });
+    if (offlineWaveguide && this.source === 'lf') {
+      // Keep solver-rate floating-point inputs and outputs in numeric storage.
+      this.#waveguideInputs = new Float64Array(4);
+      this.#airflowScratch = {};
+    }
   }
 
   /**
@@ -563,12 +593,19 @@ export class VoiceRenderer {
     return this.position >= this.totalSamples;
   }
 
-  #updateShape() {
-    this.shape = blockShape(this.plan, this.time, this.state, this.head, {
-      sections: this.sections,
-      teeth: this.teeth,
-      vowelCorrections: this.vowelCorrections,
-    });
+  #setTract() {
+    const options = this.#shapeOptions;
+    options.sections = this.sections;
+    options.teeth = this.teeth;
+    options.vowelCorrections = this.vowelCorrections;
+    this.shape = blockShape(
+      this.plan,
+      this.time,
+      this.state,
+      this.head,
+      options,
+      this.#tract
+    );
     this.solver.setShape(
       this.shape.areas,
       this.shape.velumArea,
@@ -578,11 +615,31 @@ export class VoiceRenderer {
     );
     this.solver.setLength?.(this.shape.length);
     this.stepDuration = this.solver.stepDuration(this.shape);
+  }
+
+  #updateShape(configure) {
+    if (
+      this.shape &&
+      this.plan[STEADY_TRACT] &&
+      this.#builtinSolver &&
+      this.solver instanceof Waveguide &&
+      this.source === 'lf'
+    ) {
+      this.state.time = this.time;
+    } else {
+      this.#setTract();
+    }
     const rate = 1 / this.stepDuration;
     this.noise.configure(rate);
     this.#updateAirflow(rate);
-    // The output filter runs when the solver outputs arrive (see #finish).
-    this.rates.push(this.steps, rate);
+    if (this.#builtinSolver && this.source === 'lf') {
+      this.glottis.prepareBlock(this.shape.glottis);
+    }
+    if (configure) {
+      configure(this.steps, rate);
+    } else {
+      this.output.configure(rate);
+    }
   }
 
   /**
@@ -616,7 +673,8 @@ export class VoiceRenderer {
       blockDuration,
       10 * (this.state.lungPressure ?? this.head.lungPressure),
       opening,
-      constriction
+      constriction,
+      this.#airflowScratch
     );
     this.airflow = air;
     glottis.oralPressure = air.oralPressure;
@@ -749,7 +807,7 @@ export class VoiceRenderer {
     return this.noise.frication.process(white) * amplitude;
   }
 
-  /** Queue one solver step with the sources of this instant. */
+  /** Advance or queue one solver step with the sources of this instant. */
   #step(queue) {
     const white = this.noise.white();
     const aspiration = this.noise.aspiration.process(white);
@@ -757,14 +815,23 @@ export class VoiceRenderer {
     if (control.whisper > 0) {
       control.whisperNoise = this.noise.whisper.process(white);
     }
-    let source = this.interaction
-      ? this.glottis.step(
-          this.stepDuration,
-          this.shape.glottis,
-          aspiration,
-          this.#glottalLoad()
-        )
-      : this.glottis.step(this.stepDuration, this.shape.glottis, aspiration);
+    const inputs = this.#waveguideInputs;
+    let source;
+    if (inputs) {
+      inputs[0] = aspiration;
+      inputs[1] = this.stepDuration;
+      this.glottis.stepInto(inputs, control);
+      source = inputs[0];
+    } else {
+      source = this.interaction
+        ? this.glottis.step(
+            this.stepDuration,
+            control,
+            aspiration,
+            this.#glottalLoad()
+          )
+        : this.glottis.step(this.stepDuration, control, aspiration);
+    }
     if (control.whisper > 0 && this.source === 'folds') {
       source = this.#whisperFolds(source, control);
     }
@@ -776,18 +843,68 @@ export class VoiceRenderer {
       this.transient += this.transientStep;
       flow = this.transient;
     }
-    queue(source, this.shape.frication.position, noise, flow);
+    const position = this.shape.frication.position;
+    if (queue) {
+      queue(source, position, noise, flow);
+    } else if (inputs) {
+      inputs[1] = position;
+      inputs[2] = noise;
+      inputs[3] = flow;
+      this.solver.stepInto(inputs);
+      this.previous = this.current;
+      this.current = this.output.filter(inputs[0]);
+    } else {
+      this.previous = this.current;
+      this.current = this.output.filter(
+        this.solver.step(source, position, noise, flow)
+      );
+    }
     this.steps++;
   }
 
   /**
-   * Run the sources and the shapes for the next samples and queue the
-   * solver steps they need. Each sample interpolates between two step
-   * outputs: index 0 and 1 are the last two of the previous call, the
-   * steps of this call follow.
+   * Run the sources and shapes for the next samples. Synchronous solvers
+   * write samples immediately. Queued solvers record the interpolation
+   * between the last two step outputs for #finish.
    */
-  #record(target, queue) {
+  #run(target, configure, step, sample) {
+    const { output, listener } = this;
+    const length = target.length;
     this.steps = 0;
+    const outputStep = 1 / this.sampleRate;
+    let written = 0;
+    while (written < length && !this.done) {
+      const offset = this.position % this.blockSize;
+      if (offset === 0 || !this.shape) {
+        this.#updateShape(configure);
+      }
+      const blockEnd = Math.min(
+        length,
+        written + this.blockSize - offset,
+        written + this.totalSamples - this.position
+      );
+      for (; written < blockEnd; written++, this.position++) {
+        while (this.solverTime <= this.time) {
+          this.#step(step);
+          this.solverTime += this.stepDuration;
+        }
+        const fraction = 1 - (this.solverTime - this.time) / this.stepDuration;
+        if (sample) {
+          sample(written, fraction);
+        } else {
+          const value =
+            this.previous + (this.current - this.previous) * fraction;
+          target[written] = output.finish(
+            listener ? listener.process(value) : value
+          );
+        }
+        this.time += outputStep;
+      }
+    }
+    return written;
+  }
+
+  #record(target, queue) {
     this.rates = [];
     const samples = {
       previous: new Int32Array(target.length),
@@ -797,33 +914,20 @@ export class VoiceRenderer {
     };
     let previous = 0;
     let current = 1;
-    const outputStep = 1 / this.sampleRate;
-    let written = 0;
-    while (written < target.length && !this.done) {
-      const offset = this.position % this.blockSize;
-      if (offset === 0 || !this.shape) {
-        this.#updateShape();
+    samples.count = this.#run(
+      target,
+      (step, rate) => this.rates.push(step, rate),
+      (source, position, noise, flow) => {
+        previous = current;
+        current = 2 + this.steps;
+        queue(source, position, noise, flow);
+      },
+      (index, fraction) => {
+        samples.previous[index] = previous;
+        samples.current[index] = current;
+        samples.fraction[index] = fraction;
       }
-      const blockEnd = Math.min(
-        target.length,
-        written + this.blockSize - offset,
-        written + this.totalSamples - this.position
-      );
-      for (; written < blockEnd; written++, this.position++) {
-        while (this.solverTime <= this.time) {
-          previous = current;
-          current = 2 + this.steps;
-          this.#step(queue);
-          this.solverTime += this.stepDuration;
-        }
-        samples.previous[written] = previous;
-        samples.current[written] = current;
-        samples.fraction[written] =
-          1 - (this.solverTime - this.time) / this.stepDuration;
-        this.time += outputStep;
-      }
-    }
-    samples.count = written;
+    );
     return samples;
   }
 
@@ -867,11 +971,7 @@ export class VoiceRenderer {
    * @returns {number} Number of samples written (less than target.length at the end).
    */
   render(target) {
-    const outputs = [];
-    const samples = this.#record(target, (...step) =>
-      outputs.push(this.solver.step(...step))
-    );
-    return this.#finish(target, samples, outputs);
+    return this.#run(target);
   }
 
   /**
@@ -904,6 +1004,20 @@ export function releaseRenderer(renderer) {
   renderer.solver?.gpu?.destroy();
 }
 
+const OFFLINE_CHUNK_SIZE = 4096;
+
+/** Render a complete output while keeping temporary solver buffers bounded. */
+export function renderSamples(renderer, allocate) {
+  const { totalSamples } = renderer;
+  const samples = allocate
+    ? allocate(totalSamples).fill(0)
+    : new Float32Array(totalSamples);
+  for (let start = 0; start < samples.length; start += OFFLINE_CHUNK_SIZE) {
+    renderer.render(samples.subarray(start, start + OFFLINE_CHUNK_SIZE));
+  }
+  return samples;
+}
+
 /**
  * Render a whole plan offline. `engine` (default `'auto'`) is an engine
  * name or an engine object of createEngine; the name is resolved with
@@ -913,17 +1027,46 @@ export function releaseRenderer(renderer) {
  * @returns {Float32Array}
  */
 export function renderPlan(plan, options = {}) {
-  const renderer = getEngine(engineOptions(options)).createRenderer(
-    plan,
-    options
-  );
+  return renderPlanWithStorage(plan, options);
+}
+
+/** Render into an optional, caller-owned Float32Array of the given length. */
+export function renderPlanWithStorage(plan, options, allocate) {
+  const renderer = offlineRenderer(plan, options);
   try {
-    const samples = new Float32Array(renderer.totalSamples);
-    renderer.render(samples);
-    return samples;
+    return renderSamples(renderer, allocate);
   } finally {
     releaseRenderer(renderer);
   }
+}
+
+/** Consume an offline render synchronously using a reusable audio block. */
+export function visitRenderedPlan(plan, options, visit) {
+  const renderer = offlineRenderer(plan, options);
+  try {
+    const { totalSamples } = renderer;
+    const block = new Float32Array(Math.min(totalSamples, OFFLINE_CHUNK_SIZE));
+    for (let start = 0; start < totalSamples; start += block.length) {
+      const remaining = totalSamples - start;
+      const chunk =
+        remaining < block.length ? block.subarray(0, remaining) : block;
+      renderer.render(chunk.fill(0));
+      visit(chunk);
+    }
+  } finally {
+    releaseRenderer(renderer);
+  }
+}
+
+function offlineRenderer(plan, options) {
+  const engine = getEngine(engineOptions(options));
+  const offlineWaveguide =
+    engine.name === 'js' &&
+    (options.engine === undefined || typeof options.engine === 'string');
+  return engine.createRenderer(
+    plan,
+    offlineWaveguide ? { ...options, [OFFLINE_WAVEGUIDE]: true } : options
+  );
 }
 
 /** The options of createEngine in render options. */

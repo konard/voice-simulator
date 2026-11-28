@@ -67,25 +67,6 @@ export function interleave(channels) {
 }
 
 /**
- * Average interleaved channels into mono.
- * @param {ArrayLike<number>} interleaved
- * @param {number} channels
- * @returns {Float32Array}
- */
-export function mixdown(interleaved, channels) {
-  const frames = Math.floor(interleaved.length / channels);
-  const result = new Float32Array(frames);
-  for (let frame = 0; frame < frames; frame++) {
-    let sum = 0;
-    for (let channel = 0; channel < channels; channel++) {
-      sum += interleaved[frame * channels + channel];
-    }
-    result[frame] = sum / channels;
-  }
-  return result;
-}
-
-/**
  * Float sample in [-1, 1] to a signed integer of `bits` bits (clipped).
  * @param {number} value
  * @param {number} bits
@@ -218,6 +199,32 @@ export function encodeSamples(channels, format) {
   return bytes;
 }
 
+// Sum the signed integers before scaling to keep the inner loop integral.
+// Container channel counts fit comfortably within the exact integer range.
+function decodeInt16Mono(view, offset, frames, channels, little, mono) {
+  let at = offset;
+  for (let frame = 0; frame < frames; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels; channel++) {
+      sum += view.getInt16(at, little);
+      at += 2;
+    }
+    mono[frame] = sum / 32768 / channels;
+  }
+}
+
+function decodeFloat32Mono(view, offset, frames, channels, little, mono) {
+  let at = offset;
+  for (let frame = 0; frame < frames; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels; channel++) {
+      sum += view.getFloat32(at, little);
+      at += 4;
+    }
+    mono[frame] = sum / channels;
+  }
+}
+
 /**
  * Decode interleaved sample bytes to mono floats (channels are averaged).
  * @param {Uint8Array} bytes
@@ -227,15 +234,36 @@ export function encodeSamples(channels, format) {
  * @param {{bitDepth: number, kind: string, little: boolean}} format
  * @returns {Float32Array}
  */
-export function decodeSamples(bytes, offset, length, channels, format) {
+export function decodeSamples(
+  bytes,
+  offset,
+  length,
+  channels,
+  format,
+  allocate
+) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const width = format.bitDepth / 8;
   const frames = Math.floor(length / (width * channels));
-  const values = new Float64Array(frames * channels);
-  for (let index = 0; index < values.length; index++) {
-    values[index] = readSample(view, offset + index * width, format);
+  const mono = allocate ? allocate(frames) : new Float32Array(frames);
+  if (format.kind === 'int' && width === 2) {
+    decodeInt16Mono(view, offset, frames, channels, format.little, mono);
+    return mono;
   }
-  return mixdown(values, channels);
+  if (format.kind === 'float' && width === 4) {
+    decodeFloat32Mono(view, offset, frames, channels, format.little, mono);
+    return mono;
+  }
+  let at = offset;
+  for (let frame = 0; frame < frames; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels; channel++) {
+      sum += readSample(view, at, format);
+      at += width;
+    }
+    mono[frame] = sum / channels;
+  }
+  return mono;
 }
 
 /** Four-character code at `offset`. */

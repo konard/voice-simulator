@@ -138,7 +138,7 @@ export const VOWEL_SECTIONS = 44;
 const ROUNDING_WEIGHT = 0.6;
 
 function point([height, backness, rounded]) {
-  return [height, backness, rounded * ROUNDING_WEIGHT];
+  return Float64Array.of(height, backness, rounded * ROUNDING_WEIGHT);
 }
 
 function distance(a, b) {
@@ -197,12 +197,23 @@ export function fitInterpolator(centers, values) {
   const weights = solveLinear(
     matrix,
     values.map((samples) => [...samples, 0, 0, 0, 0])
-  );
-  return (at) => {
-    const kernel = [...centers.map((center) => distance(center, at)), 1, ...at];
-    return weights.map((row) =>
-      row.reduce((sum, weight, index) => sum + weight * kernel[index], 0)
-    );
+  ).map((row) => Float64Array.from(row));
+  const kernel = new Float64Array(size);
+  return (at, result = new Array(weights.length)) => {
+    for (let i = 0; i < count; i++) {
+      kernel[i] = distance(centers[i], at);
+    }
+    kernel[count] = 1;
+    kernel.set(at, count + 1);
+    for (let i = 0; i < weights.length; i++) {
+      const row = weights[i];
+      let sum = 0;
+      for (let k = 0; k < size; k++) {
+        sum += row[k] * kernel[k];
+      }
+      result[i] = sum;
+    }
+    return result;
   };
 }
 
@@ -297,6 +308,18 @@ function getInterpolator(corrections) {
   return interpolate;
 }
 
+export function createVowelWorkspace() {
+  const values = new Float64Array(VOWEL_SECTIONS + 1);
+  return {
+    position: { height: 0, backness: 0, rounded: 0 },
+    point: new Float64Array(3),
+    values,
+    baseAreas: values.subarray(0, VOWEL_SECTIONS),
+    shape: { areas: new Float64Array(VOWEL_SECTIONS), length: 0 },
+    corrections: undefined,
+  };
+}
+
 /**
  * Area function (cm², 44 sections, glottis to lips) for a vowel position.
  * @param {{height: number, backness: number, rounded: number|boolean}} vowel
@@ -307,26 +330,53 @@ function getInterpolator(corrections) {
  */
 export function vowelShape(
   { height, backness, rounded },
-  corrections = VOWEL_CORRECTIONS
+  corrections = VOWEL_CORRECTIONS,
+  workspace
 ) {
   const rounding = Number(rounded);
   // The measured set has rounding only on back vowels, so front and central
   // rounded vowels start from the unrounded shape and get rounded lips.
   const measuredRounding = backness >= 0.6 ? rounding : 0;
-  const values = getInterpolator(corrections)(
-    point([height, backness, measuredRounding])
-  );
-  const areas = new Float64Array(VOWEL_SECTIONS);
-  for (let index = 0; index < VOWEL_SECTIONS; index++) {
-    const root = Math.max(0.25, values[index]);
-    areas[index] = root * root;
+  const scratch = workspace ?? createVowelWorkspace();
+  const { point: at, values, baseAreas, shape } = scratch;
+  const weightedRounding = measuredRounding * ROUNDING_WEIGHT;
+  // Adjacent blocks can share tongue-body coordinates even as the teeth,
+  // tongue tip or other articulators modify the final area function.
+  if (
+    scratch.corrections !== corrections ||
+    !Object.is(at[0], height) ||
+    !Object.is(at[1], backness) ||
+    !Object.is(at[2], weightedRounding)
+  ) {
+    at[0] = height;
+    at[1] = backness;
+    at[2] = weightedRounding;
+    getInterpolator(corrections)(at, values);
+    for (let index = 0; index < VOWEL_SECTIONS; index++) {
+      const root = Math.max(0.25, values[index]);
+      values[index] = root * root;
+    }
+    scratch.corrections = corrections;
   }
+  const { areas } = shape;
+  areas.set(baseAreas);
   const extraRounding = rounding - measuredRounding;
-  const shape = { areas, length: values[VOWEL_SECTIONS] };
-  return extraRounding > 0 ? roundLips(shape, extraRounding) : shape;
+  if (extraRounding > 0) {
+    narrowLips(areas, extraRounding);
+  }
+  shape.length =
+    values[VOWEL_SECTIONS] + (extraRounding > 0 ? 1.1 * extraRounding : 0);
+  return shape;
 }
 
 const LIP_ROUNDING = [0.85, 0.65, 0.45, 0.32, 0.25];
+
+function narrowLips(areas, amount) {
+  const offset = areas.length - LIP_ROUNDING.length;
+  for (let i = 0; i < LIP_ROUNDING.length; i++) {
+    areas[offset + i] *= 1 - amount * (1 - LIP_ROUNDING[i]);
+  }
+}
 
 /**
  * How far rounded lips push forward (cm per unit of `rounding`): the
@@ -343,9 +393,6 @@ export const LIP_PROTRUSION = 0.6;
  */
 export function roundLips({ areas, length }, amount) {
   const result = Float64Array.from(areas);
-  const offset = result.length - LIP_ROUNDING.length;
-  LIP_ROUNDING.forEach((factor, index) => {
-    result[offset + index] *= 1 - amount * (1 - factor);
-  });
+  narrowLips(result, amount);
   return { areas: result, length: length + 1.1 * amount };
 }

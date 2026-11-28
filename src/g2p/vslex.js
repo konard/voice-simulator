@@ -26,8 +26,8 @@
  * `first` and the blocks hold the stored words. The mapping keeps the code point order,
  * so the stored words are sorted too.
  *
- * A lookup does a binary search in `first` and decodes one block, which
- * is cached.
+ * A lookup does a binary search in `first` and indexes one block. The
+ * pronunciation stays encoded until the word is requested.
  */
 
 const DIGITS = '0123456789';
@@ -247,47 +247,79 @@ export function isVslex(data) {
  * @param {object} data a vslex container
  * @param {number} index block number
  */
-export function decodeBlock(data, index, tables = blockTables(data)) {
+function scanBlock(data, index, tables, visit) {
   const { letters, valueOf, letterOf } = tables;
-  const entries = [];
-  let previous = [];
-  let word = null;
-  let variants = null;
-  let pronunciation = '';
-  const finish = () => {
-    if (word !== null) {
-      variants.push(pronunciation);
-      entries.push([word.join(''), variants]);
-    }
-  };
+  const word = [];
+  let started = false;
   let inWord = false;
+  let offset = 0;
+  let from = 0;
   for (const char of data.blocks[index]) {
     if (DIGITS.includes(char)) {
-      finish();
-      word = previous.slice(0, Number(char));
-      previous = word;
-      variants = [];
-      pronunciation = '';
+      if (started) {
+        visit(word.join(''), from, offset);
+      }
+      word.length = Math.min(word.length, Number(char));
+      started = true;
       inWord = true;
+      from = offset + char.length;
     } else if (inWord && letters.has(char)) {
       word.push(letterOf?.get(char) ?? char);
-    } else if (char === '/') {
-      inWord = false;
-      variants.push(pronunciation);
-      pronunciation = '';
+      from = offset + char.length;
     } else {
       inWord = false;
-      const value = valueOf.get(char);
-      if (value === undefined) {
+      if (char !== '/' && valueOf.get(char) === undefined) {
         throw new TypeError(
           `vslex ${data.lang}: unknown symbol "${char}" in block ${index}`
         );
       }
-      pronunciation += value;
+    }
+    offset += char.length;
+  }
+  if (started) {
+    visit(word.join(''), from, offset);
+  }
+}
+
+function decodeReadings(source, from, end, values) {
+  const variants = [];
+  let pronunciation = '';
+  for (const char of source.slice(from, end)) {
+    if (char === '/') {
+      variants.push(pronunciation);
+      pronunciation = '';
+    } else {
+      pronunciation += values.get(char);
     }
   }
-  finish();
+  variants.push(pronunciation);
+  return variants;
+}
+
+export function decodeBlock(data, index, tables = blockTables(data)) {
+  const source = data.blocks[index];
+  const entries = [];
+  scanBlock(data, index, tables, (word, from, end) => {
+    entries.push([word, decodeReadings(source, from, end, tables.valueOf)]);
+  });
   return entries;
+}
+
+export function indexBlock(data, index, tables) {
+  const source = data.blocks[index];
+  const ids = new Map();
+  const bounds = [];
+  scanBlock(data, index, tables, (word, from, end) => {
+    ids.set(word, bounds.length);
+    bounds.push(from, end);
+  });
+  const offsets = Uint32Array.from(bounds);
+  return (word) => {
+    const id = ids.get(word);
+    return id === undefined
+      ? null
+      : decodeReadings(source, offsets[id], offsets[id + 1], tables.valueOf);
+  };
 }
 
 /**

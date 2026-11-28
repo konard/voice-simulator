@@ -13,7 +13,11 @@ import {
 import { createEvents } from '../recognition/recognizer-stream.js';
 import { synthesize } from '../synthesize.js';
 import { loadVoice, saveVoice } from '../voice-file.js';
-import { blockPitch, createAudioWindow } from './audio-window.js';
+import {
+  blockPitch,
+  createAudioWindow,
+  createRecordingWindow,
+} from './audio-window.js';
 import { createLivePasses } from './live-passes.js';
 import { sessionPasses } from './passes.js';
 import { cpuTime, createSessionScheduler } from './scheduler.js';
@@ -90,6 +94,14 @@ function accentOptions(accent) {
   return accent ? { accent: accent.code, accentLevel: accent.strength } : {};
 }
 
+function audioWindow(settings, openWindow = createAudioWindow) {
+  const capacity = Math.max(
+    1,
+    Math.ceil(settings.window * settings.sampleRate)
+  );
+  return openWindow(capacity);
+}
+
 // State, sample cursors and scheduled pass publication share the same lifetime.
 // eslint-disable-next-line max-lines-per-function, max-statements
 export function createSession(
@@ -97,14 +109,13 @@ export function createSession(
   {
     passes = sessionPasses,
     openRecognizer = createRecognizer,
-    previews = true,
+    finalOnly = false,
+    openWindow,
   } = {}
 ) {
   const settings = optionsFor(options);
   const { sampleRate, realtime } = settings;
-  const window = createAudioWindow(
-    Math.max(1, Math.ceil(settings.window * sampleRate))
-  );
+  const window = audioWindow(settings, openWindow);
   const stride = Math.round(sampleRate * ANALYSIS_BLOCK);
   const seed = settings.voice ? loadVoice(settings.voice) : null;
   const events = createEvents();
@@ -128,10 +139,11 @@ export function createSession(
       voice: DEFAULT_HEAD,
       deterministic: !realtime,
       engine: settings.recognitionEngine,
+      profile: options.profile,
     },
     {
       liveWords,
-      previews,
+      finalOnly,
       liveModeReference: settings.includeModeLabels === true,
       onReading:
         live &&
@@ -557,6 +569,11 @@ export function createVoiceSession(options) {
 /** Copy a voice from one recording using the same deterministic sessions. */
 export function copyVoice(samples, sampleRate, options = {}) {
   validateRate(sampleRate);
+  const recordingWindow =
+    samples instanceof Float32Array &&
+    Object.getPrototypeOf(samples) === Float32Array.prototype &&
+    samples.buffer instanceof ArrayBuffer &&
+    !samples.buffer.resizable;
   const session = createSession(
     {
       ...options,
@@ -567,7 +584,10 @@ export function copyVoice(samples, sampleRate, options = {}) {
       realtime: false,
     },
     // The one-shot caller only consumes the final reading.
-    { previews: false }
+    {
+      finalOnly: true,
+      openWindow: recordingWindow ? createRecordingWindow : createAudioWindow,
+    }
   );
   session.push(
     samples instanceof Float32Array ? samples : Float32Array.from(samples)

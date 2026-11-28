@@ -1,11 +1,12 @@
 /** Fixed-memory sufficient statistics for voice fitting. Unlicense, issue 63. */
 import { measure } from '../recognition/profile.js';
-import { analyzeFrames } from '../recognition/frontend.js';
+import { analyzeOwnedFrames } from '../recognition/frontend.js';
+import { withFrameStorage } from '../recognition/frame-storage.js';
 import { trackPitch, jitterToHead } from '../recognition/pitch.js';
 import { trackBatchFormants } from '../recognition/formants.js';
 import { inverseFilter } from '../recognition/inverse-filter.js';
 import { HEAD_PARAMETERS, DEFAULT_HEAD } from '../head-config.js';
-import { prepareLegacyVoice } from './voice-features.js';
+import { prepareLegacyVoice, sliceVoiceSamples } from './voice-features.js';
 import {
   transcriptSpeechRate,
   transcriptPitchRange,
@@ -67,51 +68,69 @@ export function emptyState() {
     },
   };
 }
+const nonnegativeStateFields = [
+  'duration',
+  'voicedSeconds',
+  'speechSeconds',
+  'nuclei',
+  'voicedFrames',
+];
+const diagnosticFields = ['hnr', 'h1h2', 'frames'];
+const perturbationFields = [
+  'periods',
+  'period',
+  'amplitude',
+  'pairs',
+  'periodDiff',
+  'amplitudeDiff',
+];
+function fieldsOf(state, fields) {
+  return Object.fromEntries(fields.map((key) => [key, state[key]]));
+}
 export function copyState(state) {
   if (!state) {
     return emptyState();
   }
   const copy = JSON.parse(JSON.stringify(state));
-  const expected = emptyState();
   if (
     copy.version !== 1 ||
-    Object.entries(expected.histograms).some(
-      ([key, bins]) =>
-        copy.histograms?.[key]?.length !== bins.length ||
+    Object.entries(HISTOGRAMS).some(
+      ([key, [min, max, step]]) =>
+        copy.histograms?.[key]?.length !== Math.round((max - min) / step) + 1 ||
         copy.histograms[key].some((n) => !Number.isFinite(n) || n < 0)
     ) ||
-    Object.keys(expected)
-      .filter((key) => typeof expected[key] === 'number' && key !== 'tilt')
-      .some((key) => !Number.isFinite(copy[key]) || copy[key] < 0) ||
+    nonnegativeStateFields.some(
+      (key) => !Number.isFinite(copy[key]) || copy[key] < 0
+    ) ||
     !validNuclei(copy.landmarks) ||
     copy.mel?.length !== 24 ||
     copy.mel.some((v) => !Number.isFinite(v)) ||
     !Number.isFinite(copy.tilt) ||
-    !['hnr', 'h1h2', 'frames'].every((key) =>
+    !diagnosticFields.every((key) =>
       Number.isFinite(copy.diagnostics?.[key])
     ) ||
     copy.diagnostics.frames < 0 ||
-    Object.keys(expected.perturbation).some(
+    perturbationFields.some(
       (key) =>
         !Number.isFinite(copy.perturbation?.[key]) || copy.perturbation[key] < 0
     )
   ) {
     throw new RangeError('Invalid voice fitter state');
   }
-  return Object.fromEntries(
-    Object.keys(expected).map((key) => [
-      key,
-      key === 'histograms'
-        ? Object.fromEntries(
-            Object.keys(HISTOGRAMS).map((k) => [k, copy.histograms[k]])
-          )
-        : key === 'diagnostics' || key === 'perturbation'
-          ? Object.fromEntries(
-              Object.keys(expected[key]).map((k) => [k, copy[key][k]])
-            )
-          : copy[key],
-    ])
-  );
+  return {
+    version: copy.version,
+    histograms: fieldsOf(copy.histograms, Object.keys(HISTOGRAMS)),
+    duration: copy.duration,
+    voicedSeconds: copy.voicedSeconds,
+    speechSeconds: copy.speechSeconds,
+    nuclei: copy.nuclei,
+    landmarks: copy.landmarks,
+    voicedFrames: copy.voicedFrames,
+    mel: copy.mel,
+    tilt: copy.tilt,
+    diagnostics: fieldsOf(copy.diagnostics, diagnosticFields),
+    perturbation: fieldsOf(copy.perturbation, perturbationFields),
+  };
 }
 export function addValue(state, key, value) {
   if (!Number.isFinite(value) || (key === 'f0' && value <= 0)) {
@@ -184,7 +203,11 @@ export function medianSd(state, key) {
     key === 'f0' ? centre * (2 ** (1 / 48) - 1) : HISTOGRAMS[key][2];
   return (1.4826 * Math.max(mad, width / 2)) / Math.sqrt(count / 20);
 }
+const FRAME_FORMANTS = ['f1', 'f2', 'f3', 'f4'];
+const FRAME_SOURCE_FEATURES = ['rd', 'hnr', 'cpp', 'h1h2Source', 'h1h2'];
+
 function collectFrames(state, frames, pitch, formants, source, formantCount) {
+  const trackedFormants = Math.min(FRAME_FORMANTS.length, formantCount);
   for (let t = 0; t < frames.count; t++) {
     if (!(pitch.f0[t] > 0)) {
       continue;
@@ -196,25 +219,27 @@ function collectFrames(state, frames, pitch, formants, source, formantCount) {
     for (let k = 0; k < 24; k++) {
       state.mel[k] += frames.mel[t * 24 + k];
     }
-    for (let k = 0; k < Math.min(4, formantCount); k++) {
-      if (formants.valid[t * 4 + k]) {
-        addValue(state, `f${k + 1}`, formants.frequency[t * 4 + k]);
+    const base = t * 4;
+    for (let k = 0; k < trackedFormants; k++) {
+      if (formants.valid[base + k]) {
+        addValue(state, FRAME_FORMANTS[k], formants.frequency[base + k]);
       }
     }
     if (
       formantCount >= 3 &&
       !formants.nasal[t] &&
-      [0, 1, 2].every((k) => formants.valid[t * 4 + k])
+      formants.valid[base] &&
+      formants.valid[base + 1] &&
+      formants.valid[base + 2]
     ) {
-      const spacing =
-        [0, 1, 2].reduce(
-          (sum, k) => sum + formants.frequency[t * 4 + k] * (k + 0.5),
-          0
-        ) / 8.75;
-      addValue(state, 'dF', spacing);
+      let sum = 0;
+      for (let k = 0; k < 3; k++) {
+        sum += formants.frequency[base + k] * (k + 0.5);
+      }
+      addValue(state, 'dF', sum / 8.75);
     }
     if (source?.reliable[t]) {
-      for (const key of ['rd', 'hnr', 'cpp', 'h1h2Source', 'h1h2']) {
+      for (const key of FRAME_SOURCE_FEATURES) {
         addValue(state, key, source[key][t]);
       }
     }
@@ -228,14 +253,19 @@ function collectDiagnostics(state, legacy) {
   }
 }
 
-function analyzeVoiceInput(samples, sampleRate, options) {
+function analyzeVoiceInput(samples, sampleRate, options, storage) {
   const { profile, kernels } = options;
   const frames = measure(profile, 'Front end', () =>
-    analyzeFrames(samples, sampleRate, {
-      order: options.order,
-      rate: options.analysisRate,
-      hop: options.analysisHop ?? 0.005,
-    })
+    analyzeOwnedFrames(
+      samples,
+      sampleRate,
+      {
+        order: options.order,
+        rate: options.analysisRate,
+        hop: options.analysisHop ?? 0.005,
+      },
+      storage
+    )
   );
   const pitch = measure(profile, 'Pitch', () =>
     trackPitch(frames, { kernels })
@@ -263,29 +293,47 @@ export function accumulate(
   diagnostics = true,
   captureDiagnostics = null
 ) {
+  return withFrameStorage((storage) =>
+    accumulateWithStorage(
+      state,
+      samples,
+      sampleRate,
+      options,
+      { diagnostics, captureDiagnostics },
+      storage
+    )
+  );
+}
+
+function accumulateWithStorage(
+  state,
+  samples,
+  sampleRate,
+  options,
+  { diagnostics, captureDiagnostics },
+  storage
+) {
   const maxSeconds = options.maxDuration ?? 30;
   const input = Float32Array.from(
     samples.length > maxSeconds * sampleRate
-      ? Array.prototype.slice.call(
-          samples,
-          0,
-          Math.floor(maxSeconds * sampleRate)
-        )
+      ? sliceVoiceSamples(samples, Math.floor(maxSeconds * sampleRate))
       : samples
   );
   const { profile } = options;
   const { frames, pitch } =
-    options.frontEnd ?? analyzeVoiceInput(input, sampleRate, options);
+    options.frontEnd ?? analyzeVoiceInput(input, sampleRate, options, storage);
   // Use the tracker's initial tract prior for every stretch. Re-estimating
   // that prior from a whole utterance makes the pooled dF depend on splits.
   const formants = measure(profile, 'Formants', () =>
     trackBatchFormants(frames, { pitch, vocalTractLength: 16.5 })
   );
   const source = analyzeVoiceSource(frames, pitch, options);
-  const analysis = prepareLegacyVoice(input, sampleRate, {
-    ...options,
-    diagnosticsOnly: true,
-  });
+  const analysis = prepareLegacyVoice(
+    input,
+    sampleRate,
+    { ...options, diagnosticsOnly: true },
+    true
+  );
   const legacy = diagnostics ? analysis.complete() : analysis.rateFeatures;
   captureDiagnostics?.(analysis.complete);
   state.duration += input.length / sampleRate;
@@ -302,6 +350,7 @@ export function accumulate(
   countNuclei(state, input, sampleRate, frames, {
     order: options.order,
     rate: options.analysisRate,
+    retainCarry: options.retainNucleiCarry,
     hop: options.analysisHop,
   });
   collectFrames(

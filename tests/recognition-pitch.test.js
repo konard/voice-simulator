@@ -20,8 +20,12 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { createRandom, randomNormal } from '../src/random.js';
-import { analyzeFrameHops } from '../src/recognition/frontend.js';
-import { trackPitchHops } from '../src/recognition/pitch.js';
+import {
+  analyzeFrameHops,
+  analyzePitchFrames,
+} from '../src/recognition/frontend.js';
+import { withFrameStorage } from '../src/recognition/frame-storage.js';
+import { trackPitchFrames, trackPitchHops } from '../src/recognition/pitch.js';
 import {
   highPass,
   maskedPair,
@@ -43,6 +47,71 @@ it('shares pitch candidates without changing either hop’s pitch path', () => {
   const { pitch, fitPitch } = trackPitchHops(frames);
   expect(fitPitch).toEqual(trackPitch(frames.fine));
   expect(pitch).toEqual(trackPitch(frames.coarse));
+});
+
+it('reuses batch pitch scratch across frame counts and window sizes', () => {
+  const sampleRate = 8000;
+  const samples = renderPlan(planUtterance('ama'), { sampleRate, seed: 1 });
+  const whole = analyzeFrames(samples, sampleRate);
+  const short = analyzeFrames(samples.subarray(1000, 1600), sampleRate);
+  let retained;
+  for (const [frames, options] of [
+    [whole, undefined],
+    [whole, { candidates: 1, minF0: 90 }],
+    [short, { candidates: 9, minF0: 35 }],
+    [whole, { candidates: 4 }],
+    [short, { candidates: 1, minF0: 90 }],
+  ]) {
+    const tracker = createPitchTracker(frames, options);
+    tracker.advance(true);
+    const expected = tracker.track;
+    expect(trackPitch(frames, options)).toEqual(expected);
+    const actual = trackPitchFrames(frames, options);
+    for (const name of ['f0', 'voicing', 'strength']) {
+      expect(actual[name]).toEqual(expected[name].subarray(0, frames.count));
+    }
+    const prosody = trackPitchFrames(frames, { ...options, percentiles: true });
+    for (const name of ['low', 'median', 'high']) {
+      expect(prosody[name]).toBe(expected[name]);
+    }
+    retained ??= { track: actual, original: actual.f0.slice() };
+  }
+  expect(retained.track.f0).toEqual(retained.original);
+});
+
+it('keeps the default pitch contour with only pitch analysis columns', () => {
+  for (const sampleRate of [8000, 16000]) {
+    const samples = renderPlan(planUtterance('ama'), { sampleRate, seed: 1 });
+    const frames = analyzeFrames(samples, sampleRate);
+    const expected = trackPitch(frames);
+    const actual = trackPitchFrames(analyzePitchFrames(samples, sampleRate));
+    expect(actual.hop).toBe(expected.hop);
+    expect(actual.f0).toEqual(expected.f0.subarray(0, frames.count));
+  }
+});
+
+it('overwrites reused pitch columns and resets the voiced distribution', () => {
+  const rate = 8000;
+  const samples = renderPlan(planUtterance('ama'), {
+    sampleRate: rate,
+    seed: 1,
+  });
+  const voiced = analyzePitchFrames(samples, rate);
+  const silent = analyzePitchFrames(new Float32Array(samples.length), rate);
+  const options = { percentiles: true };
+  const expected = trackPitchFrames(voiced, options);
+  expect(expected.median).toBeGreaterThan(0);
+  const buffer = withFrameStorage((storage) => {
+    const track = trackPitchFrames(voiced, options, storage);
+    expect(track).toEqual(expected);
+    return track.f0.buffer;
+  });
+  withFrameStorage((storage) => {
+    const track = trackPitchFrames(silent, options, storage);
+    expect(track.f0.buffer).toBe(buffer);
+    expect(track).toEqual(trackPitchFrames(silent, options));
+    expect(track.median).toBe(null);
+  });
 });
 
 /** The sentence for `preset` at `sampleRate` (waveguide, seed 1), cached. */

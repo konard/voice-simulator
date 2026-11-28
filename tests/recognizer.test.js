@@ -292,6 +292,35 @@ it('can skip interim readings and still read the final phrase', () => {
   assert.deepEqual(snapshots, [0.5]);
 });
 
+for (const sampleRate of [8000, 16000]) {
+  it(`keeps final readings at ${sampleRate} Hz with the acoustic speech gate`, () => {
+    const phrase = samplePhrase(sampleRate);
+    const signal = new Float32Array(2 * (phrase.length + sampleRate / 2));
+    signal.set(phrase);
+    signal.set(phrase, signal.length / 2);
+    const options = {
+      sampleRate,
+      languages: ['en'],
+      voice: DEFAULT_HEAD,
+      modes: false,
+      level: 'medium',
+      deterministic: true,
+      segments: true,
+    };
+    const read = (live) => {
+      const stream = createRecognizer(options, live);
+      const finals = [];
+      stream.on('final', (reading) => finals.push(reading));
+      stream.push(signal);
+      return { result: stream.flush(), finals };
+    };
+    const previous = read({ previews: false });
+    assert.equal(previous.finals.length, 2);
+    assert.ok(previous.result.words.length);
+    assert.deepEqual(read({ finalOnly: true }), previous);
+  });
+}
+
 it('never changes committed words or takes a syllable back', () => {
   const signal = new Float32Array(4 * RATE);
   const phrase = samplePhrase(RATE);

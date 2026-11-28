@@ -10,6 +10,7 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { float64View } from '../src/engine/wasm-loader.js';
+import { inverseModeMeasures } from '../src/recognition/inverse-filter.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 import { highPass } from './helpers/recognition-truth.js';
@@ -181,6 +182,68 @@ describe('Rust inverse filter parity', () => {
     expect(inverseFilter(frames, { pitch }).lowBand).toBe(false);
     await parity(frames, pitch);
   });
+  it('matches full Rust source measures at the requested mode rows', async () => {
+    const module = await loadRustEngine();
+    expect(typeof module.exports.rec_inverse_modes).toBe('function');
+    expect(typeof module.exports.rec_inverse_modes_f32).toBe('function');
+    const legacy = {
+      ...module,
+      exports: { ...module.exports, rec_inverse_modes_f32: undefined },
+    };
+    for (const [rate, removeLowBand] of [
+      [16000, false],
+      [8000, true],
+    ]) {
+      const vowel = sourceVowel(0.5, 110, rate);
+      const samples = removeLowBand
+        ? highPass(vowel.samples, rate, 300)
+        : vowel.samples;
+      const frames = analyzeFrames(samples, rate);
+      const pitch = {
+        count: frames.count,
+        hop: frames.hop,
+        startTime: frames.startTime,
+        f0: new Float32Array(frames.count).fill(110),
+      };
+      pitch.f0[0] = 0;
+      const options = { pitch, kernels: { module } };
+      const rows = [0, 5, 11, 24, frames.count - 1];
+      const full = inverseFilter(frames, options);
+      expect(full.lowBand).toBe(!removeLowBand);
+      const mode = inverseModeMeasures(frames, options, rows);
+      expect(mode).toEqual(
+        inverseModeMeasures(
+          frames,
+          { pitch, kernels: { module: legacy } },
+          rows
+        )
+      );
+      const empty = inverseModeMeasures(frames, options, []);
+      expect(Object.keys(mode)).toEqual(['h1h2Source', 'hnr', 'cpp']);
+      for (const name of Object.keys(mode)) {
+        expect(mode[name].length).toBe(frames.count);
+        for (let t = 0; t < frames.count; t++) {
+          const expected = rows.includes(t) ? full[name][t] : NaN;
+          expect(Object.is(mode[name][t], expected)).toBe(true);
+          expect(Number.isNaN(empty[name][t])).toBe(true);
+        }
+      }
+    }
+  });
+  it('keeps the original packet for alternate frame column types', async () => {
+    const module = await loadRustEngine();
+    const { samples } = sourceVowel(0.3, 110, 16000);
+    const frames = analyzeFrames(samples, 16000);
+    frames.speech = Float64Array.from(frames.speech, (value) => 256 * value);
+    const original = {
+      ...module,
+      exports: { ...module.exports, rec_inverse_modes_f32: undefined },
+    };
+    const rows = [5, 11, 24];
+    expect(inverseModeMeasures(frames, { kernels: { module } }, rows)).toEqual(
+      inverseModeMeasures(frames, { kernels: { module: original } }, rows)
+    );
+  });
   it('matches local pitch on changing speech', async () => {
     const out = synthesize('Hello world.', {
       sampleRate: 8000,
@@ -205,5 +268,6 @@ describe('Rust inverse filter parity', () => {
     const e = (await loadRustEngine()).exports;
     expect(e.vs_inverse_filter(0, 0, 0, 0)).toBe(-6);
     expect(e.vs_inverse_filter(1, 14, 0, 0)).toBe(-2);
+    expect(e.rec_inverse_modes_f32(1, 0, 0, 0, 0, 0, 0)).toBe(-2);
   });
 });

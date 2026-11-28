@@ -12,6 +12,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { GOLDEN_DIR, loadManifest } from '../../scripts/golden.mjs';
@@ -35,24 +36,38 @@ export function isReviewed(item) {
  *   sampleRate: number, review: {text: string, ipa: string, by: string|null}}[]}
  */
 export function loadGolden(options = {}) {
-  const { lang, reviewedOnly = false, dir = GOLDEN_DIR } = options;
-  const manifest = loadManifest(dir);
-  return manifest.utterances
-    .filter((item) => lang === undefined || item.lang === lang)
+  const { dir = GOLDEN_DIR } = options;
+  return selectedUtterances(dir, options).map((item) =>
+    decodeUtterance(item, readFileSync(path.join(dir, item.file)))
+  );
+}
+
+/** Decode in manifest order. With storage, consume each item before advancing. */
+export async function* goldenRecordings(options = {}) {
+  const { dir = GOLDEN_DIR, storage } = options;
+  for (const item of selectedUtterances(dir, options)) {
+    const bytes = await readFile(path.join(dir, item.file));
+    yield decodeUtterance(item, bytes, storage);
+  }
+}
+
+function selectedUtterances(dir, { lang, reviewedOnly, limit }) {
+  return loadManifest(dir)
+    .utterances.filter((item) => lang === undefined || item.lang === lang)
     .filter((item) => !reviewedOnly || isReviewed(item))
-    .map((item) => {
-      const { samples, sampleRate } = decodeFlac(
-        new Uint8Array(readFileSync(path.join(dir, item.file)))
-      );
-      return {
-        id: item.id,
-        lang: item.lang,
-        text: item.text,
-        ipa: item.ipa,
-        speaker: { ...item.speaker },
-        samples,
-        sampleRate,
-        review: { ...item.review },
-      };
-    });
+    .slice(0, limit ?? Infinity);
+}
+
+function decodeUtterance(item, bytes, storage) {
+  const { samples, sampleRate } = decodeFlac(bytes, undefined, storage);
+  return {
+    id: item.id,
+    lang: item.lang,
+    text: item.text,
+    ipa: item.ipa,
+    speaker: { ...item.speaker },
+    samples,
+    sampleRate,
+    review: { ...item.review },
+  };
 }

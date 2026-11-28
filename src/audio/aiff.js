@@ -132,7 +132,7 @@ function compressionFormat(type, bitDepth) {
  * @param {Uint8Array} bytes
  * @returns {{sampleRate: number, samples: Float32Array, channels: number, bitDepth: number, float: boolean}}
  */
-export function decodeAiff(bytes) {
+export function decodeAiff(bytes, _maxSeconds, allocate) {
   const kind = readTag(bytes, 8);
   if (readTag(bytes, 0) !== 'FORM' || (kind !== 'AIFF' && kind !== 'AIFC')) {
     throw new Error('Not an AIFF file');
@@ -170,7 +170,14 @@ export function decodeAiff(bytes) {
   );
   return {
     sampleRate: comm.sampleRate,
-    samples: decodeSamples(bytes, sound.start, length, channels, format),
+    samples: decodeSamples(
+      bytes,
+      sound.start,
+      length,
+      channels,
+      format,
+      allocate
+    ),
     channels,
     bitDepth: format.bitDepth,
     float: format.kind === 'float',

@@ -44,7 +44,8 @@ import {
   WALL_RESISTANCE,
   WALL_STIFFNESS,
   LOSS_REFERENCE_SECTIONS,
-  designLossFilter,
+  lossShelf,
+  setLossFilter,
   viscothermalLoss,
   wallSurface,
 } from './losses.js';
@@ -147,6 +148,11 @@ function lossStages(sections, stages) {
 }
 
 export class Waveguide {
+  #stepBuffer = new Float64Array(4);
+  // Outgoing glottal/lip waves, then turbulence position and outgoing waves.
+  #junction = new Float64Array(5);
+  #shelf;
+  #lossCoefficients = { b0: 0, b1: 0, a1: 0 };
   /**
    * `piriform: false` leaves out the piriform fossae side branch.
    * `lossShape`, `lossStages` and `baffle` replace LOSS_SHAPE (or
@@ -269,6 +275,9 @@ export class Waveguide {
   /** Redesign the loss filters and walls once after shape or length changes. */
   #refreshLosses() {
     this.lossesStale = false;
+    if (this.rate) {
+      this.#shelf = lossShelf(this.rate);
+    }
     this.#configurePiriform();
     this.#configureLosses();
     this.#configureNoseLosses();
@@ -372,7 +381,11 @@ export class Waveguide {
     }
     stages.designK[group] = K;
     stages.designRate[group] = this.rate;
-    const { b0, b1, a1 } = designLossFilter(K, this.rate);
+    const { b0, b1, a1 } = setLossFilter(
+      K,
+      this.#shelf,
+      this.#lossCoefficients
+    );
     stages.b0[group] = b0;
     stages.b1[group] = b1;
     stages.a1[group] = a1;
@@ -399,10 +412,9 @@ export class Waveguide {
       sectionLength;
     const { filter } = piriform;
     if (K !== filter.K || this.rate !== filter.rate) {
-      Object.assign(filter, designLossFilter(K, this.rate), {
-        K,
-        rate: this.rate,
-      });
+      setLossFilter(K, this.#shelf, filter);
+      filter.K = K;
+      filter.rate = this.rate;
     }
   }
 
@@ -506,20 +518,15 @@ export class Waveguide {
    * junctions of the velum and the piriform fossae and the noise and flow
    * sources take the slower path of flagged junctions, and the yielding
    * walls then draw their flow from the new waves (#yieldWalls).
-   * @param {number} glottis Wave leaving the glottis (junction 0).
-   * @param {number} lips Wave reflected at the lips (junction n).
-   * @param {number} position Junction of the noise source, or -1.
-   * @param {number} addRight Source added to the right-going wave there:
-   *   half the flow source plus half the noise pressure.
-   * @param {number} addLeft Source added to the left-going wave there:
-   *   half the flow source minus half the noise pressure.
    */
-  #scatterOral(glottis, lips, position, addRight, addLeft) {
+  #scatterOral() {
     const { right, left, reflection, damping, specials } = this;
+    const junction = this.#junction;
+    const position = junction[2];
     const nextRight = this.spareRight;
     const nextLeft = this.spareLeft;
     const n = this.n;
-    nextRight[0] = glottis * damping[0];
+    nextRight[0] = junction[0] * damping[0];
     let index = 1;
     let special = 0;
     for (;;) {
@@ -538,15 +545,15 @@ export class Waveguide {
       if (index >= n) {
         break;
       }
-      this.#scatterSpecial(index, position, addRight, addLeft);
+      this.#scatterSpecial(index);
       if (index === specials[special]) {
         special++;
       }
       index++;
     }
-    nextLeft[n - 1] = lips * damping[n - 1];
+    nextLeft[n - 1] = junction[1] * damping[n - 1];
     if (this.walls) {
-      this.#yieldWalls(position, addRight);
+      this.#yieldWalls();
     }
     this.spareRight = right;
     this.spareLeft = left;
@@ -558,7 +565,7 @@ export class Waveguide {
    * A flagged junction of #scatterOral: the three-port junctions of the
    * velum and the piriform fossae, and the noise source.
    */
-  #scatterSpecial(index, position, addRight, addLeft) {
+  #scatterSpecial(index) {
     const incomingRight = this.right[index - 1];
     const incomingLeft = this.left[index];
     let outRight;
@@ -574,9 +581,10 @@ export class Waveguide {
       outRight = incomingRight + w;
       outLeft = incomingLeft + w;
     }
-    if (index === position) {
-      outRight += addRight;
-      outLeft += addLeft;
+    const junction = this.#junction;
+    if (index === junction[2]) {
+      outRight += junction[3];
+      outLeft += junction[4];
     }
     this.spareRight[index] = outRight * this.damping[index];
     this.spareLeft[index - 1] = outLeft * this.damping[index - 1];
@@ -714,17 +722,16 @@ export class Waveguide {
    * one junction are neighbours in group order (the junctions do not
    * decrease with the group), and each sees the pressure the walls before
    * it left.
-   * @param {number} position Junction of the noise source, or -1.
-   * @param {number} addRight Source added to the right-going wave there
-   *   (see #scatterOral).
    */
-  #yieldWalls(position, addRight) {
+  #yieldWalls() {
     const { right, left, reflection, damping, wallJunction } = this;
     const { wallFlow, wallVolume, wallDrive, wallGain, wallDrop } = this;
     const nextRight = this.spareRight;
     const nextLeft = this.spareLeft;
     const spring = this.wallSpring;
     const step = this.wallStep;
+    const noiseJunction = this.#junction[2];
+    const noiseRight = this.#junction[3];
     let junction = -1;
     let pressure = 0;
     for (let group = 0; group < wallJunction.length; group++) {
@@ -738,7 +745,7 @@ export class Waveguide {
           incomingRight +
           incomingLeft +
           reflection[index] * (incomingRight - incomingLeft) +
-          (index === position ? addRight : 0);
+          (index === noiseJunction ? noiseRight : 0);
       }
       // The wall flow U_w lowers the junction pressure by rho c U_w /
       // (a + b) in the same step, which damps the wall like the
@@ -794,6 +801,24 @@ export class Waveguide {
    * @returns {number} Radiated output (lips + nose).
    */
   step(glottalFlow, noisePosition, noise, flow = 0) {
+    const buffer = this.#stepBuffer;
+    buffer[0] = glottalFlow;
+    buffer[1] = noisePosition;
+    buffer[2] = noise;
+    buffer[3] = flow;
+    this.stepInto(buffer);
+    return buffer[0];
+  }
+
+  /**
+   * @internal Replace the glottal flow with the radiated output.
+   * Indices 1–3 hold the turbulence position, noise and flow.
+   */
+  stepInto(buffer) {
+    const glottalFlow = buffer[0];
+    const noisePosition = buffer[1];
+    const noise = buffer[2];
+    const flow = buffer[3];
     if (this.lossesStale) {
       this.#refreshLosses();
     }
@@ -804,13 +829,14 @@ export class Waveguide {
     this.#scatterVelum();
     this.#scatterPiriform();
     const source = noise !== 0 || flow !== 0;
-    this.#scatterOral(
-      this.left[0] * this.glottalReflection + glottalFlow / this.areas[0],
-      reflected,
-      source ? Math.min(last, Math.max(1, noisePosition)) : -1,
-      (flow + noise) * 0.5,
-      (flow - noise) * 0.5
-    );
+    const junction = this.#junction;
+    junction[0] =
+      this.left[0] * this.glottalReflection + glottalFlow / this.areas[0];
+    junction[1] = reflected;
+    junction[2] = source ? Math.min(last, Math.max(1, noisePosition)) : -1;
+    junction[3] = (flow + noise) * 0.5;
+    junction[4] = (flow - noise) * 0.5;
+    this.#scatterOral();
     this.#propagatePiriform();
     this.#filterStages(this.stages, this.right, this.left);
     if (this.velumOpen || !this.noseSilent) {
@@ -822,7 +848,7 @@ export class Waveguide {
         this.#silenceNose();
       }
     }
-    return this.lipOutput + this.noseOutput;
+    buffer[0] = this.lipOutput + this.noseOutput;
   }
 
   /**

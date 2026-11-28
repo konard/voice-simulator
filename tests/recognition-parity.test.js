@@ -81,16 +81,20 @@ it('reuses steady nasal reference geometry without changing samples', async () =
     engine: 'rust',
     threads: 1,
   });
-  for (const vocalTractLength of [13, 19, 13]) {
-    const plan = steadyPlan({ height: 0.8, velum: 1 });
-    const options = {
-      engine: renderer,
-      head: { vocalTractLength },
-      sampleRate: 16000,
-    };
-    const cached = renderPlan(plan, options);
-    delete plan[STEADY_TRACT];
-    assert.deepEqual(cached, renderPlan(plan, options));
+  for (const engine of ['js', renderer]) {
+    for (const vocalTractLength of [13, 19, 13]) {
+      for (const whisper of [0, 1]) {
+        const plan = steadyPlan({ height: 0.8, velum: 1, whisper });
+        const options = {
+          engine,
+          head: { vocalTractLength },
+          sampleRate: 16000,
+        };
+        const cached = renderPlan(plan, options);
+        delete plan[STEADY_TRACT];
+        assert.deepEqual(cached, renderPlan(plan, options));
+      }
+    }
   }
 });
 

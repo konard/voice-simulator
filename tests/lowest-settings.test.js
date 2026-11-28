@@ -45,6 +45,58 @@ const oneRow = run(
 );
 oneRow.catch(() => {});
 
+it('certifies memory only when both engines complete at or below the limit', () => {
+  const conditions = { pinned: true, limit: null, node: 'v24.22.3' };
+  const check = (js, rust, environment = conditions) =>
+    judge(
+      { synthesis: { js, rust } },
+      {
+        synthesis: { memory: { peakRssMb: 256 } },
+      },
+      {},
+      environment
+    ).synthesis.memory.status;
+  const fits = { peakRssMb: 256, capped: { heapLimitMb: 192 } };
+  assert.equal(check(fits, fits), 'certified');
+  assert.equal(
+    check(fits, fits, { ...conditions, node: 'v26.0.0' }),
+    'unavailable'
+  );
+  assert.equal(check(fits, { ...fits, peakRssMb: 0 }), 'unavailable');
+  assert.equal(check(fits, undefined), 'unavailable');
+  assert.equal(check(fits, { peakRssMb: 256 }), 'unavailable');
+  assert.equal(check(fits, fits, { ...conditions, limit: 1 }), 'unavailable');
+  assert.equal(
+    check(fits, fits, { ...conditions, pinned: false }),
+    'unavailable'
+  );
+  assert.equal(
+    check(fits, fits, {
+      ...conditions,
+      rowMeasurements: { synthesis: { ...conditions, limit: 1 } },
+    }),
+    'unavailable'
+  );
+  assert.equal(
+    check(fits, fits, {
+      ...conditions,
+      node: 'v26.0.0',
+      rowMeasurements: { synthesis: conditions },
+    }),
+    'certified'
+  );
+  assert.equal(check(fits, { engine: 'rust', error: 'failed' }), 'failed');
+  assert.equal(check(fits, { peakRssMb: 256.001 }), 'failed');
+  assert.equal(
+    check(fits, {
+      ...fits,
+      engine: 'rust',
+      capped: { crashed: 'out of memory' },
+    }),
+    'failed'
+  );
+});
+
 describe('lowest settings', () => {
   it('speaks at 8 kHz', () => {
     const { samples, sampleRate } = speak();
@@ -93,6 +145,11 @@ describe('lowest settings', () => {
   });
 });
 
+it('requires synthesis worker RTF to be strictly below real time', () => {
+  assert.equal(passes('workerRtf', 0.9999, 1), true);
+  assert.equal(passes('workerRtf', 1, 1), false);
+});
+
 describe('lowest settings publication', () => {
   it('requires both recognition speed cells to pass under the heap cap', () => {
     const limits = {
@@ -117,11 +174,6 @@ describe('lowest settings publication', () => {
 
   const dir = mkdtempSync(path.join(tmpdir(), 'lowest-settings-'));
   after(() => rmSync(dir, { recursive: true, force: true }));
-
-  it('requires synthesis worker RTF to be strictly below real time', () => {
-    assert.equal(passes('workerRtf', 0.9999, 1), true);
-    assert.equal(passes('workerRtf', 1, 1), false);
-  });
 
   const cells = (status) => ({
     synthesis: {
@@ -226,6 +278,7 @@ describe('lowest settings publication', () => {
     assert.deepEqual(result.runs.session, refresh.runs.session);
     assert.equal(result.rowMeasurements.session.commit, refresh.commit);
     assert.equal(result.rowMeasurements.session.pinned, true);
+    assert.equal(result.rowMeasurements.session.limit, null);
     assert.match(
       readFileSync(path.join(dir, REPORT_PATH), 'utf8'),
       /Pinned with `taskset -c 0`\. Command `LOWEST_ROW=session/u

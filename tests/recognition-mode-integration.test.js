@@ -1,19 +1,95 @@
 /** Pause sounds and mode replay integration. Unlicense. */
 import { describe, it, expect } from 'test-anywhere';
 import {
+  recognize,
   recognizeModes,
   toPlanModes,
   planUtterance,
   synthesize,
   prepareUtterance,
 } from '../src/index.js';
-import { voiceBaseline } from '../src/recognition/mode-baseline.js';
+import {
+  emotionReferences,
+  installPreparedModeBaselines,
+  modeBaselineKey,
+  physicalReferences,
+  voiceBaseline,
+} from '../src/recognition/mode-baseline.js';
 import { effortRamps } from '../src/recognition/mode-spans.js';
 import {
   phraseSummary,
   measureWords,
 } from '../src/recognition/mode-features.js';
 import { HEAD } from './helpers/recognition-modes.js';
+
+it('keeps unknown-voice modes when unused formants are omitted', () => {
+  const audio = synthesize('The train leaves at seven.', {
+    tier: 'telephone',
+    seed: 1,
+    engine: 'js',
+  });
+  const heard = { words: audio.timeline.words };
+  const stages = [];
+  const result = recognizeModes(audio.samples, audio.sampleRate, heard, {
+    profile: (stage) => stages.push(stage),
+  });
+  expect(stages.includes('Formants')).toBe(false);
+  const traced = recognizeModes(audio.samples, audio.sampleRate, heard, {
+    trace() {},
+    profile: (stage) => stages.push(stage),
+  });
+  expect(stages.includes('Formants')).toBe(true);
+  expect(result).toEqual(traced);
+});
+
+it('reuses the batch word analysis for mode measurement', () => {
+  const { samples, sampleRate } = synthesize('The train leaves at seven.', {
+    tier: 'telephone',
+    engine: 'js',
+    seed: 1,
+  });
+  const stages = [];
+  const result = recognize(samples, sampleRate, {
+    engine: 'js',
+    languages: ['en'],
+    level: 'low',
+    unsplit: true,
+    profile: (stage) => stages.push(stage),
+  });
+  expect(result.words.length).toBeGreaterThan(0);
+  expect(stages.includes('Glottal periods')).toBe(true);
+  expect(stages.includes('Front end')).toBe(false);
+});
+
+it('uses the prepared telephone references for the matching known voice', () => {
+  const voice = { head: HEAD };
+  const source = voiceBaseline(voice, 8000, 'en');
+  const row = {
+    ipa: source.ipa,
+    features: source.features,
+    vowels: source.vowels,
+    references: emotionReferences(source),
+    physical: physicalReferences(source),
+  };
+  const key = modeBaselineKey(source.head, 'telephone', 'en');
+  const requested = [];
+  installPreparedModeBaselines((signature) => {
+    requested.push(signature);
+    return signature === key ? row : undefined;
+  });
+  try {
+    const baseline = voiceBaseline(voice, 8000, 'en');
+    expect(baseline.ipa).toBe(row.ipa);
+    expect(baseline.features).toBe(row.features);
+    expect(baseline.vowels).toBe(row.vowels);
+    expect(emotionReferences(baseline)).toBe(row.references);
+    expect(physicalReferences(baseline)).toBe(row.physical);
+    expect(voiceBaseline(voice, 8000, 'ru').prepared).toBeUndefined();
+    expect(requested.length).toBe(2);
+  } finally {
+    installPreparedModeBaselines(undefined);
+  }
+});
 
 describe('speech-mode integration', () => {
   it('preserves an existing sound token without duplicating its detection', () => {

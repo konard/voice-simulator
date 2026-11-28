@@ -1,32 +1,39 @@
 /** Measured pitch and level on a synthesis plan's control grid. Unlicense. */
 import { pitchBeforePhonation } from '../acoustics/glottis.js';
 import { interpolateGaps, smoothChannel } from '../articulation/plan.js';
-import { renderPlan } from '../acoustics/voice.js';
-import { analyzeFrames } from '../recognition/frontend.js';
-import { trackPitch } from '../recognition/pitch.js';
+import { renderPlan, visitRenderedPlan } from '../acoustics/voice.js';
+import { analyzePitchFrames } from '../recognition/frontend.js';
+import { trackPitchFrames } from '../recognition/pitch.js';
 import { sampleTrack } from './warp.js';
 
 export const DRAFT_RATE = 16000;
 
-function voicedMedian(values, from, to) {
-  const voiced = [];
+function voicedMedian(values, from, to, voiced) {
+  let count = 0;
   for (let i = Math.max(0, from); i <= Math.min(values.length - 1, to); i++) {
     if (values[i] > 0) {
-      voiced.push(values[i]);
+      voiced[count++] = values[i];
     }
   }
-  voiced.sort((a, b) => a - b);
-  const middle = Math.floor(voiced.length / 2);
-  return (voiced[middle] + voiced[Math.floor((voiced.length - 1) / 2)]) / 2;
+  if (!count) {
+    return NaN;
+  }
+  voiced.subarray(0, count).sort();
+  return (
+    (voiced[Math.floor(count / 2)] + voiced[Math.floor((count - 1) / 2)]) / 2
+  );
 }
 
 export function repairOctaves(values, frameRate) {
   const radius = Math.round(0.1 * frameRate);
+  const voiced = new Float64Array(
+    Math.min(values.length, Math.max(0, 2 * radius + 1))
+  );
   return Float32Array.from(values, (value, i) => {
     if (!(value > 0)) {
       return NaN;
     }
-    const median = voicedMedian(values, i - radius, i + radius);
+    const median = voicedMedian(values, i - radius, i + radius, voiced);
     const distance = 12 * Math.log2(value / median);
     if (Math.abs(distance) <= 9) {
       return value;
@@ -38,8 +45,9 @@ export function repairOctaves(values, frameRate) {
 
 export function pitchContour(measured, frameRate, fallback) {
   const repaired = repairOctaves(measured, frameRate);
+  const voiced = new Float64Array(5);
   const filtered = Float32Array.from(repaired, (value, i) =>
-    Number.isNaN(value) ? value : voicedMedian(repaired, i - 2, i + 2)
+    Number.isNaN(value) ? value : voicedMedian(repaired, i - 2, i + 2, voiced)
   );
   interpolateGaps(filtered, fallback);
   return smoothChannel(filtered, 0.01, frameRate);
@@ -47,7 +55,7 @@ export function pitchContour(measured, frameRate, fallback) {
 
 export function applyPitch(plan, samples, sampleRate, modes, matchVoicing) {
   const { frameRate, frameCount, channels } = plan;
-  const track = trackPitch(analyzeFrames(samples, sampleRate));
+  const track = trackPitchFrames(analyzePitchFrames(samples, sampleRate));
   const measured = Float32Array.from({ length: frameCount }, (_, i) => {
     const t = i / frameRate;
     if (
@@ -91,22 +99,52 @@ export function applyPitch(plan, samples, sampleRate, modes, matchVoicing) {
   }
 }
 
-export function rmsTrack(samples, rate, frameCount, frameRate) {
+function createRmsTrack(rate, frameCount, frameRate) {
   const radius = rate * 0.0125;
-  let loudest = -Infinity;
-  const values = Float64Array.from({ length: frameCount }, (_, i) => {
-    const center = (i * rate) / frameRate;
-    const start = Math.max(0, Math.round(center - radius));
-    const end = Math.min(samples.length, Math.round(center + radius));
-    let sum = 0;
-    for (let j = start; j < end; j++) {
-      sum += samples[j] ** 2;
+  const values = new Float64Array(frameCount);
+  let offset = 0;
+  let pending = 0;
+  function append(samples) {
+    const through = offset + samples.length;
+    for (let i = pending; i < frameCount; i++) {
+      const center = (i * rate) / frameRate;
+      const start = Math.max(offset, Math.round(center - radius));
+      if (start >= through) {
+        break;
+      }
+      const end = Math.round(center + radius);
+      const available = Math.min(through, end);
+      let sum = values[i];
+      for (let j = start; j < available; j++) {
+        sum += samples[j - offset] ** 2;
+      }
+      values[i] = sum;
+      if (end <= through) {
+        pending = i + 1;
+      }
     }
-    const level = sum > 0 ? 10 * Math.log10(sum / (end - start)) : -Infinity;
-    loudest = Math.max(loudest, level);
-    return level;
-  });
-  return { values, threshold: loudest - 40 };
+    offset = through;
+  }
+  function finish() {
+    let loudest = -Infinity;
+    for (let i = 0; i < frameCount; i++) {
+      const center = (i * rate) / frameRate;
+      const start = Math.max(0, Math.round(center - radius));
+      const end = Math.min(offset, Math.round(center + radius));
+      const sum = values[i];
+      const level = sum > 0 ? 10 * Math.log10(sum / (end - start)) : -Infinity;
+      values[i] = level;
+      loudest = Math.max(loudest, level);
+    }
+    return { values, threshold: loudest - 40 };
+  }
+  return { append, finish };
+}
+
+export function rmsTrack(samples, rate, frameCount, frameRate) {
+  const track = createRmsTrack(rate, frameCount, frameRate);
+  track.append(samples);
+  return track.finish();
 }
 
 export function loudnessGain(reference, draft) {
@@ -123,13 +161,22 @@ export function matchLevels(loudness, reference, draft) {
   }
 }
 
+function draftSettings(seed) {
+  return { solver: 'waveguide', sections: 22, sampleRate: DRAFT_RATE, seed };
+}
+
 export function renderDraft(plan, seed) {
-  return renderPlan(plan, {
-    solver: 'waveguide',
-    sections: 22,
-    sampleRate: DRAFT_RATE,
-    seed,
-  });
+  return renderPlan(plan, draftSettings(seed));
+}
+
+export function renderedRmsTrack(plan, settings) {
+  const track = createRmsTrack(
+    settings.sampleRate,
+    plan.frameCount,
+    plan.frameRate
+  );
+  visitRenderedPlan(plan, settings, track.append);
+  return track.finish();
 }
 
 export function matchLoudness(plan, samples, sampleRate, seed, settings) {
@@ -137,14 +184,10 @@ export function matchLoudness(plan, samples, sampleRate, seed, settings) {
   const reference = rmsTrack(samples, sampleRate, frameCount, frameRate);
   // The telephone renderer limits the bandwidth and uses a shorter
   // waveguide. Calibrate against that renderer, including its filter.
-  const telephone = settings?.name === 'telephone';
+  const render =
+    settings?.name === 'telephone' ? settings : draftSettings(seed);
   for (let pass = 0; pass < 2; pass++) {
-    const draft = rmsTrack(
-      telephone ? renderPlan(plan, settings) : renderDraft(plan, seed),
-      telephone ? settings.sampleRate : DRAFT_RATE,
-      frameCount,
-      frameRate
-    );
+    const draft = renderedRmsTrack(plan, render);
     matchLevels(channels.loudness, reference, draft);
   }
 }

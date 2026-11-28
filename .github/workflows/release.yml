@@ -649,15 +649,26 @@ jobs:
           path: |
             src/engine/voice-simulator.wasm
             src/engine/voice-simulator-oral-codebook.bin
+            src/engine/voice-simulator-hmm-en.bin.gz
+            src/engine/voice-simulator-hmm-ru.bin.gz
+            src/engine/voice-simulator-hmm-hi.bin.gz
+            src/engine/voice-simulator-hmm-zh.bin.gz
+            src/engine/voice-simulator-hmm-index.bin.gz
+            src/engine/voice-simulator-hmm-en-6000.bin.gz
+            src/engine/voice-simulator-hmm-ru-6000.bin.gz
+            src/engine/voice-simulator-hmm-hi-6000.bin.gz
+            src/engine/voice-simulator-hmm-zh-6000.bin.gz
+            src/engine/voice-simulator-hmm-index-6000.bin.gz
             src/engine/voice-simulator-word-transitions-en.bin.gz
             src/engine/voice-simulator-word-transitions-ru.bin.gz
             src/engine/voice-simulator-word-transitions-hi.bin.gz
             src/engine/voice-simulator-word-transitions-zh.bin.gz
             src/engine/voice-simulator-recognition-models.json.gz
-            src/engine/voice-simulator-recognition-en.json.gz
-            src/engine/voice-simulator-recognition-ru.json.gz
-            src/engine/voice-simulator-recognition-hi.json.gz
-            src/engine/voice-simulator-recognition-zh.json.gz
+            src/engine/voice-simulator-recognition-modes.bin.gz
+            src/engine/voice-simulator-recognition-en.bin.gz
+            src/engine/voice-simulator-recognition-ru.bin.gz
+            src/engine/voice-simulator-recognition-hi.bin.gz
+            src/engine/voice-simulator-recognition-zh.bin.gz
           if-no-files-found: error
           retention-days: 14
 

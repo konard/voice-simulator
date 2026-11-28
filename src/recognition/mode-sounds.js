@@ -1,6 +1,6 @@
 /** Conservative pause sound cues, issue 71. Unlicense. */
-import { analyzeFrames } from './frontend.js';
-import { trackPitch } from './pitch.js';
+import { analyzeFrames, analyzePitchFrames } from './frontend.js';
+import { trackPitchFrames } from './pitch.js';
 import { trackFormants } from './formants.js';
 import { quantile } from './mode-features.js';
 
@@ -22,7 +22,9 @@ export function recognizeSounds(samples, sampleRate, words, analyzed) {
   let sharedPitch;
   let sharedFormants;
   for (const pause of pauses) {
-    const frames = analyzed ?? analyzePause(samples, sampleRate, pause);
+    const signal = analyzed ? null : pauseSignal(samples, sampleRate, pause);
+    const frames =
+      analyzed ?? analyzePitchFrames(signal, sampleRate, { hop: 0.01 });
     const first = analyzed ? Math.ceil(pause.start / frames.hop) : 0;
     const last = analyzed
       ? Math.min(frames.count, Math.ceil(pause.end / frames.hop))
@@ -41,8 +43,8 @@ export function recognizeSounds(samples, sampleRate, words, analyzed) {
       continue;
     }
     const pitch = analyzed
-      ? (sharedPitch ??= trackPitch(frames, { minF0: 35 }))
-      : trackPitch(frames, { minF0: 35 });
+      ? (sharedPitch ??= trackPitchFrames(frames, { minF0: 35 }))
+      : trackPitchFrames(frames, { minF0: 35 });
     // Resonant breath noise can produce a weak autocorrelation candidate.
     const voiced = active.filter(
       (t) => pitch.f0[t] > 0 && pitch.strength[t] >= 0.9
@@ -68,7 +70,7 @@ export function recognizeSounds(samples, sampleRate, words, analyzed) {
     if (!sound && duration > 0.2 && voiced.length / active.length > 0.8) {
       const formants = analyzed
         ? (sharedFormants ??= trackFormants(frames, { pitch }))
-        : trackFormants(frames, { pitch });
+        : trackFormants(analyzePause(signal, sampleRate), { pitch });
       const f1 = quantile(voiced.map((t) => formants.frequency[t * 4]));
       const f2 = quantile(voiced.map((t) => formants.frequency[t * 4 + 1]));
       const f0s = voiced.map((t) => pitch.f0[t]);
@@ -100,11 +102,14 @@ export function recognizeSounds(samples, sampleRate, words, analyzed) {
   return result;
 }
 
-function analyzePause(samples, sampleRate, pause) {
-  const signal = samples.subarray(
+function pauseSignal(samples, sampleRate, pause) {
+  return samples.subarray(
     Math.round(pause.start * sampleRate),
     Math.round(pause.end * sampleRate)
   );
+}
+
+function analyzePause(signal, sampleRate) {
   return analyzeFrames(signal, sampleRate, {
     hop: 0.01,
     maxSeconds: signal.length / sampleRate + 0.1,

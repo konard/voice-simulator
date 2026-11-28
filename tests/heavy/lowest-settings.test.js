@@ -15,6 +15,7 @@ import { fetchDataset } from '../../scripts/datasets.mjs';
 import { loadManifest } from '../../scripts/golden.mjs';
 import {
   formatReport,
+  HEAP_LIMIT_MB,
   judge,
   passes,
   regressions,
@@ -41,7 +42,7 @@ assert.ok(
 );
 const rows = selected ? [selected] : ALL_ROWS;
 const ENGINES = ['js', 'rust'];
-const HEAP_CAP = '--max-old-space-size=192';
+const HEAP_CAP = `--max-old-space-size=${HEAP_LIMIT_MB}`;
 const STREAM_SECONDS = 60;
 const MODE_UTTERANCES = 60;
 const ROW_TIMEOUT_MS = 6 * 3_600_000;
@@ -142,7 +143,7 @@ async function measure(row, engine, core) {
   }
   const capped = await run(row, engine, core, true);
   if (capped.result) {
-    return { ...capped.result, capped: {} };
+    return { ...capped.result, capped: { heapLimitMb: HEAP_LIMIT_MB } };
   }
   const crash = OUT_OF_MEMORY.test(capped.stderr)
     ? 'JavaScript heap out of memory'
@@ -327,9 +328,9 @@ describe('lowest settings: 8 kHz and one core', () => {
       ...(selected && { row: selected }),
       limits: thresholds,
       runs,
-      cells: judge(runs, thresholds, issues),
       regressions: [],
     };
+    data.cells = judge(runs, thresholds, issues, data);
     writeReport('lowest-settings', formatReport(data), data);
     if (Number.isFinite(limit)) {
       // A run on fewer utterances is a smoke test, not the certification.

@@ -1,5 +1,6 @@
 /** Dataset loading and scoring shared by the real-speech benchmark and tests. */
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import {
   DatasetError,
@@ -7,11 +8,15 @@ import {
   fetchDataset,
   readDataset,
 } from '../../../scripts/datasets.mjs';
-import { decodeAudio } from '../../../src/audio/formats.js';
+import { decodeAudioWithStorage } from '../../../src/audio/formats.js';
 import { textToIpa } from '../../../src/g2p/index.js';
 import { parseIpa } from '../../../src/ipa/parse.js';
 import { syllabifyIpa } from '../../../src/ipa/syllables.js';
-import { alignEdits, errorRate } from '../../../src/metrics/text.js';
+import {
+  alignEdits,
+  editDistance,
+  errorRate,
+} from '../../../src/metrics/text.js';
 import { datasetSkipReason } from '../../helpers/datasets.js';
 
 export { checkBaseline } from './benchmark-baseline.js';
@@ -47,6 +52,15 @@ export async function fetchBenchmarkSource(id, options = {}) {
 }
 
 export async function loadBenchmark({ set, limit }) {
+  const recordings = [];
+  for await (const recording of benchmarkRecordings({ set, limit })) {
+    recordings.push(recording);
+  }
+  return recordings;
+}
+
+/** Decode one recording at a time. With storage, consume it before advancing. */
+export async function* benchmarkRecordings({ set, limit, storage }) {
   const config =
     typeof set === 'string' ? BENCHMARK.sets.find(({ id }) => id === set) : set;
   if (!config) {
@@ -59,13 +73,17 @@ export async function loadBenchmark({ set, limit }) {
   if (recordings.length !== count) {
     throw new Error(`${id}: loaded ${recordings.length} of ${count} rows`);
   }
-  return recordings.map(({ id: rowId, text, audioPath }) => {
+  for (const { id: rowId, text, audioPath } of recordings) {
     if (typeof text !== 'string' || !text.trim()) {
       throw new Error(`${rowId}: missing reference transcript`);
     }
-    const { samples, sampleRate } = decodeAudio(readFileSync(audioPath));
-    return { id: rowId, language, text, samples, sampleRate };
-  });
+    const { samples, sampleRate } = decodeAudioWithStorage(
+      await readFile(audioPath),
+      {},
+      storage
+    );
+    yield { id: rowId, language, text, samples, sampleRate };
+  }
 }
 
 export function normalizeForScoring(text, language) {
@@ -171,7 +189,9 @@ export function scoreUtterance(
   const hypothesis = normalizeForScoring(result.text, language);
   const tokens = phones(result.ipa);
   const symbols = tokens.map(({ symbol }) => symbol);
-  const { distance, pairs } = alignEdits(reference.symbols, symbols);
+  const { distance, pairs } = onConfusion
+    ? alignEdits(reference.symbols, symbols)
+    : editDistance(reference.symbols, symbols);
   if (onConfusion) {
     for (const [i, j] of pairs) {
       if (reference.symbols[i] !== symbols[j]) {

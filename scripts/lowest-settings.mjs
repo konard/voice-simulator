@@ -46,7 +46,7 @@ Rows: synthesis, recognition, streaming, voice-fit, session, copy, modes.`;
 
 /** Peak resident memory of this process in MB. */
 export function peakRssMb() {
-  return Number((process.resourceUsage().maxRSS / 1024).toFixed(1));
+  return process.resourceUsage().maxRSS / 1024;
 }
 
 export async function runRow({ row, engine, limit = Infinity, traceCopy }) {
@@ -118,7 +118,16 @@ function combineRow(committed, measured) {
     limits: { ...committed.limits, [row]: limits[row] },
     rowMeasurements: {
       ...committed.rowMeasurements,
-      [row]: { measured: date, commit, command, cpu, node, pinned, core },
+      [row]: {
+        measured: date,
+        commit,
+        command,
+        cpu,
+        node,
+        pinned,
+        core,
+        limit,
+      },
     },
   };
 }
@@ -129,7 +138,7 @@ function judgeMeasurement(measured, app) {
   }
   // Rejudge downloaded runs against the limits used on the runner.
   if (Object.keys(measured.runs ?? {}).length && measured.limits) {
-    measured.cells = judge(measured.runs, measured.limits);
+    measured.cells = judge(measured.runs, measured.limits, {}, measured);
   }
 }
 

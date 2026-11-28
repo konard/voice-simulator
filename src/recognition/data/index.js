@@ -38,6 +38,18 @@ function discountedCost(count, previousCount) {
   return -0.3 * Math.log((count - 0.75) / previousCount) + 0.5;
 }
 
+/** Adapt object rows used by source builders and fixtures. */
+export function rankedWordReader(words) {
+  return Array.isArray(words)
+    ? {
+        name: (id) => words[id]?.word,
+        count: (id) => words[id]?.count,
+        weight: (id) => words[id]?.prior ?? words[id]?.count,
+        read: (id) => words[id],
+      }
+    : words;
+}
+
 /** A destination's range in offsets points to (previous word ID, count) pairs. */
 export function packWordTransitions(language) {
   const { words } = getCounts(language);
@@ -69,20 +81,78 @@ export function openWordTransitions(words, offsets, pairs) {
   ) {
     return undefined;
   }
-  const ids = new Map(words.map(({ word }, i) => [word, i]));
-  return (word) => {
-    const id = ids.get(word);
-    const start = offsets[id];
-    const end = offsets[id + 1];
-    if (!(start < end)) {
+  const ranked = rankedWordReader(words);
+  return {
+    cost(id, previous) {
+      const start = offsets[id];
+      const end = offsets[id + 1];
+      for (let i = end - 2; i >= start; i -= 2) {
+        if (pairs[i] === previous) {
+          return discountedCost(pairs[i + 1], ranked.count(previous));
+        }
+      }
       return undefined;
+    },
+    row(id) {
+      const start = offsets[id];
+      const end = offsets[id + 1];
+      if (!(start < end)) {
+        return undefined;
+      }
+      const result = new Map();
+      for (let i = start; i < end; i += 2) {
+        const previous = pairs[i];
+        result.set(
+          ranked.name(previous),
+          discountedCost(pairs[i + 1], ranked.count(previous))
+        );
+      }
+      return result;
+    },
+  };
+}
+
+function wordHash(source, start, end) {
+  let hash = 2166136261;
+  for (let i = start; i < end; i++) {
+    hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
+  }
+  return hash;
+}
+
+function sameWord(source, start, end, candidate, from, to) {
+  if (end - start !== to - from) {
+    return false;
+  }
+  while (start < end) {
+    if (source.charCodeAt(start++) !== candidate.charCodeAt(from++)) {
+      return false;
     }
-    const result = new Map();
-    for (let i = start; i < end; i += 2) {
-      const previous = words[pairs[i]];
-      result.set(previous.word, discountedCost(pairs[i + 1], previous.count));
+  }
+  return true;
+}
+
+/** Look up rank in the count-ordered source without retaining word objects. */
+function indexWords(source, starts, ends) {
+  const capacity = 2 ** Math.ceil(Math.log2(Math.max(1, 2 * starts.length)));
+  const slots = new Uint32Array(capacity);
+  const mask = slots.length - 1;
+  function find(text, from, to) {
+    let slot = wordHash(text, from, to) & mask;
+    for (let entry; (entry = slots[slot]); slot = (slot + 1) & mask) {
+      const id = entry - 1;
+      if (sameWord(source, starts[id], ends[id], text, from, to)) {
+        break;
+      }
     }
-    return result;
+    return slot;
+  }
+  for (let i = 0; i < starts.length; i++) {
+    slots[find(source, starts[i], ends[i])] = i + 1;
+  }
+  return (text, from, to) => {
+    const id = slots[find(text, from, to)];
+    return id ? id - 1 : undefined;
   };
 }
 
@@ -93,7 +163,6 @@ function indexBigrams(source, words) {
   const records = new Uint32Array(capacity * 2);
   const counts = new Float64Array(capacity);
   const heads = new Uint32Array(words.length);
-  const ids = new Map(words.map(({ word }, i) => [word, i]));
   let row = 0;
   let previous = 0;
   let next = 0;
@@ -122,19 +191,36 @@ function indexBigrams(source, words) {
     }
     value = 0;
   }
-  return (word) => {
-    let link = heads[ids.get(word)];
-    if (!link) {
-      return undefined;
-    }
-    const result = new Map();
-    while (link) {
-      const index = link - 1;
-      const previous = words[records[index * 2]];
-      result.set(previous.word, discountedCost(counts[index], previous.count));
-      link = records[index * 2 + 1];
-    }
-    return result;
+  return {
+    cost(id, previous) {
+      let cost;
+      let link = heads[id];
+      while (link) {
+        const index = link - 1;
+        if (records[index * 2] === previous) {
+          cost = discountedCost(counts[index], words.count(previous));
+        }
+        link = records[index * 2 + 1];
+      }
+      return cost;
+    },
+    row(id) {
+      let link = heads[id];
+      if (!link) {
+        return undefined;
+      }
+      const result = new Map();
+      while (link) {
+        const index = link - 1;
+        const previous = records[index * 2];
+        result.set(
+          words.name(previous),
+          discountedCost(counts[index], words.count(previous))
+        );
+        link = records[index * 2 + 1];
+      }
+      return result;
+    },
   };
 }
 
@@ -148,27 +234,32 @@ function setTransition(transitions, word, previous, count) {
 }
 
 /**
- * Give every word a `prior`: its share of the spoken-language counts scaled
+ * A word's `prior` is its share of the spoken-language counts scaled
  * to `total`, or 1 (never seen) when they lack it. The books behind the
  * counts never saw everyday words such as "hello", which then lost to
  * "her no" and "hollow" (issue 181).
  */
-function addSpokenPrior(words, total, spoken) {
-  if (!spoken) {
-    return [];
-  }
-  const shares = new Map();
-  for (const item of spoken.SPOKEN.split(' ')) {
-    const at = item.lastIndexOf('=');
-    if (at > 0) {
-      shares.set(item.slice(0, at), Number(item.slice(at + 1)));
-    }
-  }
+function spokenPriors(length, rank, total, spoken) {
   const scale = total / spoken.SPOKEN_WORDS;
-  for (const item of words) {
-    item.prior = Math.max(1, (shares.get(item.word) ?? 0) * scale);
+  const priors = new Float64Array(length).fill(1);
+  const source = spoken.SPOKEN;
+  for (let start = 0; start < source.length; ) {
+    const separator = source.indexOf(' ', start);
+    const end = separator < 0 ? source.length : separator;
+    const at = source.lastIndexOf('=', end - 1);
+    if (at > start) {
+      const id = rank(source, start, at);
+      if (id !== undefined) {
+        priors[id] = Math.max(1, Number(source.slice(at + 1, end)) * scale);
+      }
+    }
+    start = end + 1;
   }
-  return (spoken.SUPPLEMENTAL ?? '')
+  return priors;
+}
+
+function parseSupplemental(source, scale) {
+  return source
     .split(' ')
     .filter(Boolean)
     .map((item) => {
@@ -181,34 +272,107 @@ function addSpokenPrior(words, total, spoken) {
     });
 }
 
+function parseWords(source, spoken) {
+  let length = 0;
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 61) {
+      length++;
+    }
+  }
+  const starts = new Uint32Array(length);
+  const ends = new Uint32Array(length);
+  const counts = new Float64Array(length);
+  let total = 0;
+  let start = 0;
+  let id = 0;
+  while (start < source.length) {
+    const separator = source.indexOf(' ', start);
+    const end = separator === -1 ? source.length : separator;
+    if (end > start) {
+      const at = source.lastIndexOf('=', end - 1);
+      const count = Number(source.slice(at + 1, end));
+      starts[id] = start;
+      ends[id] = at;
+      counts[id++] = count;
+      total += count;
+    }
+    start = end + 1;
+  }
+  const name = (id) =>
+    starts[id] === undefined ? undefined : source.slice(starts[id], ends[id]);
+  let findWord;
+  const rankRange = (text, from, to) =>
+    (findWord ??= indexWords(source, starts, ends))(text, from, to);
+  const rank = (word) =>
+    typeof word === 'string' ? rankRange(word, 0, word.length) : undefined;
+  const priors = spoken && spokenPriors(length, rankRange, total, spoken);
+  return {
+    length,
+    total,
+    name,
+    count: (id) => counts[id],
+    prior: (id) => priors?.[id],
+    weight: (id) => priors?.[id] ?? counts[id],
+    rank,
+    read(id) {
+      const word = name(id);
+      return word === undefined
+        ? undefined
+        : { word, count: counts[id], ...(priors && { prior: priors[id] }) };
+    },
+  };
+}
+
 export function getCounts(language) {
   if (!DATA.has(language)) {
     throw new RangeError(`unsupported recognition language "${language}"`);
   }
   if (!opened.has(language)) {
     const data = DATA.get(language);
-    const words = data.WORDS.split(' ')
-      .filter(Boolean)
-      .map((item) => {
-        const at = item.lastIndexOf('=');
-        return { word: item.slice(0, at), count: Number(item.slice(at + 1)) };
-      });
-    const counts = new Map(words.map((item) => [item.word, item.count]));
-    const total = words.reduce((sum, item) => sum + item.count, 0);
-    const supplemental = addSpokenPrior(words, total, SPOKEN.get(language));
+    const spoken = SPOKEN.get(language);
+    const ranked = parseWords(data.WORDS, spoken);
+    let supplemental;
+    let words;
+    let counts;
     let bigrams;
     let openRow;
     const rows = new Map();
+    const { rank } = ranked;
+    const transitions = () =>
+      (openRow ??=
+        readTransitions?.(language, ranked) ??
+        indexBigrams(data.BIGRAMS, ranked));
     opened.set(language, {
-      words,
-      counts,
-      supplemental,
+      ranked,
+      get supplemental() {
+        return (supplemental ??= spoken?.SUPPLEMENTAL
+          ? parseSupplemental(
+              spoken.SUPPLEMENTAL,
+              ranked.total / spoken.SPOKEN_WORDS
+            )
+          : []);
+      },
+      get words() {
+        return (words ??= Array.from({ length: ranked.length }, (_, id) =>
+          ranked.read(id)
+        ));
+      },
+      wordCount: (word) => ranked.count(rank(word)),
+      get counts() {
+        if (!counts) {
+          counts = new Map();
+          for (let id = 0; id < ranked.length; id++) {
+            counts.set(ranked.name(id), ranked.count(id));
+          }
+        }
+        return counts;
+      },
       get bigrams() {
         if (!bigrams) {
           bigrams = new Map();
           for (const [previous, next, count] of bigramRows(
             data.BIGRAMS,
-            words
+            this.words
           )) {
             bigrams.set(`${previous.word}\t${next.word}`, count);
           }
@@ -217,17 +381,25 @@ export function getCounts(language) {
       },
       transitionRow(word) {
         if (!rows.has(word)) {
-          openRow ??=
-            readTransitions?.(language, words) ??
-            indexBigrams(data.BIGRAMS, words);
-          const row = openRow(word);
+          const row = transitions().row(rank(word));
           if (row) {
+            if (rows.size === 1024) {
+              rows.delete(rows.keys().next().value);
+            }
             rows.set(word, row);
           }
         }
         return rows.get(word);
       },
-      total,
+      transitionCost(word, previousWord) {
+        return rows.has(word)
+          ? rows.get(word).get(previousWord)
+          : transitions().cost(rank(word), rank(previousWord));
+      },
+      transitionCostAt(word, previous) {
+        return transitions().cost(word, previous);
+      },
+      total: ranked.total,
     });
   }
   return opened.get(language);
@@ -255,10 +427,54 @@ function transitionCosts(data) {
   return transitions;
 }
 
+const wordPairCaches = new WeakMap();
+
+function rankedWordTransition(data, id, previous) {
+  if (!previous) {
+    return undefined;
+  }
+  const before = data.ranked.rank(previous);
+  if (before === undefined) {
+    return undefined;
+  }
+  let cache = wordPairCaches.get(data.ranked);
+  if (!cache) {
+    const capacity = 4096;
+    cache = {
+      targets: new Uint32Array(capacity),
+      sources: new Uint32Array(capacity),
+      costs: new Float64Array(capacity),
+    };
+    wordPairCaches.set(data.ranked, cache);
+  }
+  const { targets, sources, costs } = cache;
+  const slot =
+    (Math.imul(id, 0x85ebca6b) ^ Math.imul(before, 0x9e3779b1)) &
+    (targets.length - 1);
+  if (targets[slot] !== id + 1 || sources[slot] !== before) {
+    costs[slot] = data.transitionCostAt(id, before) ?? NaN;
+    targets[slot] = id + 1;
+    sources[slot] = before;
+  }
+  const cost = costs[slot];
+  return Number.isNaN(cost) ? undefined : cost;
+}
+
 /** Score multiple predecessor words for one candidate. */
 export function wordTransition(data, word) {
-  const backoff =
-    -0.3 * Math.log((0.4 * (data.counts.get(word) ?? 1)) / data.total) + 0.5;
+  const ranked = data.ranked && data.transitionCostAt;
+  const id = ranked ? data.ranked.rank(word) : undefined;
+  const count = ranked
+    ? data.ranked.count(id)
+    : data.wordCount
+      ? data.wordCount(word)
+      : data.counts.get(word);
+  const backoff = -0.3 * Math.log((0.4 * (count ?? 1)) / data.total) + 0.5;
+  if (ranked) {
+    return id === undefined
+      ? () => backoff
+      : (previous) => rankedWordTransition(data, id, previous) ?? backoff;
+  }
   let row;
   return (previous) => {
     if (!previous) {

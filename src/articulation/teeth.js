@@ -64,16 +64,26 @@ function vowelGapOf(state, head) {
 }
 
 /** Gaps (cm) that the consonant channels raise the jaw towards, with weights. */
-function consonantGaps(state, head) {
-  const sibilant = head.sibilantGap ?? SIBILANT_GAP;
+function tongueGapOf(state, head, sibilant) {
   const velar = head.velarGap ?? VELAR_GAP;
   const front = smoothstep(0.66, 0.9, state.tongueLocation ?? 0.9);
-  const tongueGap = velar + (sibilant - velar) * front;
+  return velar + (sibilant - velar) * front;
+}
+
+function consonantGaps(state, head) {
+  const sibilant = head.sibilantGap ?? SIBILANT_GAP;
   return [
     [sibilant, clamp(state.sibilance ?? 0)],
-    [tongueGap, clamp((state.tongueAmount ?? 0) / 0.85)],
+    [
+      tongueGapOf(state, head, sibilant),
+      clamp((state.tongueAmount ?? 0) / 0.85),
+    ],
     [sibilant, clamp((0.4 * (state.lipAmount ?? 0)) / 0.85)],
   ];
+}
+
+function gapChange(gap, weight, vowelGap) {
+  return gap < vowelGap ? (gap - vowelGap) * weight : 0;
 }
 
 /**
@@ -102,11 +112,21 @@ export function teethGap(state, head) {
 export function impliedGap(state, head) {
   const vowelGap = vowelGapOf(state, head);
   // A consonant only ever raises the jaw towards its own gap.
-  let raised = 0;
-  for (const [gap, weight] of consonantGaps(state, head)) {
-    raised = Math.min(raised, gap < vowelGap ? (gap - vowelGap) * weight : 0);
-  }
-  return vowelGap + raised;
+  const sibilant = head.sibilantGap ?? SIBILANT_GAP;
+  const tongue = tongueGapOf(state, head, sibilant);
+  return (
+    vowelGap +
+    Math.min(
+      0,
+      gapChange(sibilant, clamp(state.sibilance ?? 0), vowelGap),
+      gapChange(tongue, clamp((state.tongueAmount ?? 0) / 0.85), vowelGap),
+      gapChange(
+        sibilant,
+        clamp((0.4 * (state.lipAmount ?? 0)) / 0.85),
+        vowelGap
+      )
+    )
+  );
 }
 
 /**
@@ -124,7 +144,7 @@ export function consonantJaw(state, head) {
   let best = { gap: vowelGap, weight: 0 };
   let raised = 0;
   for (const [gap, weight] of consonantGaps(state, head)) {
-    const change = gap < vowelGap ? (gap - vowelGap) * weight : 0;
+    const change = gapChange(gap, weight, vowelGap);
     if (change < raised) {
       raised = change;
       best = { gap, weight };
@@ -140,15 +160,17 @@ export function consonantJaw(state, head) {
  * @param {Record<string, number>} head
  * @param {number} length Tract length (cm).
  */
-export function dentition(state, head, length) {
+export function dentition(state, head, length, target = {}) {
   const end = Math.max(0, length - incisorDepth(head));
   const gap = teethGap(state, head);
-  return {
-    gap,
-    area: gap * teethWidth(head),
-    start: Math.max(0, end - (head.incisorThickness ?? INCISOR_THICKNESS)),
-    end,
-  };
+  target.gap = gap;
+  target.area = gap * teethWidth(head);
+  target.start = Math.max(
+    0,
+    end - (head.incisorThickness ?? INCISOR_THICKNESS)
+  );
+  target.end = end;
+  return target;
 }
 
 /**
@@ -162,12 +184,18 @@ export function dentition(state, head, length) {
 export function carveTeeth(areas, teeth, length) {
   const last = areas.length - 1;
   const half = 0.5 / last;
+  const start = teeth.start / length;
+  const end = teeth.end / length;
+  // Visit only the cells that can overlap the span, including the cells
+  // at both rounded boundaries so the overlap calculation decides ties.
+  const firstCell = Math.max(0, Math.floor((start - half) * last));
+  const lastCell = Math.min(last, Math.ceil((end + half) * last));
   let best = last;
   let bestCover = 0;
-  for (let index = 0; index <= last; index++) {
+  for (let index = firstCell; index <= lastCell; index++) {
     const x = index / last;
-    const low = Math.max(x - half, teeth.start / length);
-    const high = Math.min(x + half, teeth.end / length);
+    const low = Math.max(x - half, start);
+    const high = Math.min(x + half, end);
     const cover = clamp((high - low) / (2 * half));
     if (cover > 0) {
       const narrowed = Math.min(areas[index], teeth.area);

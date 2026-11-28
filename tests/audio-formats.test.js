@@ -25,6 +25,8 @@ import {
 } from '../src/index.js';
 import { readExtended, writeExtended } from '../src/audio/aiff.js';
 import { auHeader } from '../src/audio/au.js';
+import { decodeAudioWithStorage } from '../src/audio/formats.js';
+import { decodeSamples } from '../src/audio/pcm.js';
 
 function tone(length, seed = 1) {
   let state = seed;
@@ -106,6 +108,43 @@ describe('audio format round trips', () => {
     expect(view.getUint16(20, true)).toBe(1);
     expect(view.getUint16(34, true)).toBe(16);
     expect(wavHeader(48000).length).toBe(44);
+  });
+
+  it('averages signed 16-bit channels exactly in both byte orders', () => {
+    const channels = [
+      new Float32Array([-1, -1]),
+      new Float32Array([32767 / 32768, 0]),
+      new Float32Array([1 / 32768, 0]),
+    ];
+    for (const [encode, decode] of [CODECS.wav, CODECS.aiff, CODECS.au]) {
+      const bytes = encode(channels, 16000, { bitDepth: 16 });
+      const file = new Uint8Array(bytes.length + 3);
+      file.set(bytes, 3);
+      const result = decode(file.subarray(3));
+      expect(result.channels).toBe(3);
+      expect(Array.from(result.samples)).toEqual([0, Math.fround(-1 / 3)]);
+    }
+  });
+
+  it('averages unaligned 32-bit float channels in both byte orders', () => {
+    const values = [-0, -0, -0.5, 0.75, Infinity, -Infinity];
+    const offset = 3;
+    const bytes = new Uint8Array(offset + 4 * values.length);
+    const view = new DataView(bytes.buffer);
+    for (const little of [false, true]) {
+      values.forEach((value, index) =>
+        view.setFloat32(offset + index * 4, value, little)
+      );
+      const samples = decodeSamples(bytes, offset, bytes.length - offset, 2, {
+        bitDepth: 32,
+        kind: 'float',
+        little,
+      });
+      expect(samples.length).toBe(3);
+      expect(Object.is(samples[0], 0)).toBe(true);
+      expect(samples[1]).toBe(0.125);
+      expect(Number.isNaN(samples[2])).toBe(true);
+    }
   });
 
   it('round-trips raw PCM with explicit layout', () => {
@@ -436,6 +475,30 @@ describe('FLAC decoder', () => {
     expect(() => decodeFlac(broken)).toThrow();
   });
 
+  it('handles unknown and inaccurate STREAMINFO sample counts', () => {
+    const bytes = encodeFlac(tone(5003), 8000);
+    const expected = decodeFlac(bytes).samples;
+    const total = new DataView(bytes.buffer, bytes.byteOffset + 22, 4);
+    for (const declared of [0, 1500, 6000, 2_000_000]) {
+      total.setUint32(0, declared);
+      const length = declared
+        ? Math.min(declared, expected.length)
+        : expected.length;
+      expect(decodeFlac(bytes).samples).toEqual(expected.subarray(0, length));
+      let output;
+      const borrowed = decodeAudioWithStorage(bytes, {}, (frames) => {
+        output = new Float32Array(frames + 8).fill(NaN);
+        return output.subarray(4, 4 + frames);
+      }).samples;
+      expect(borrowed.buffer).toBe(output.buffer);
+      expect(borrowed.byteOffset).toBe(4 * Float32Array.BYTES_PER_ELEMENT);
+      expect(borrowed).toEqual(expected.subarray(0, length));
+    }
+    total.setUint32(0, 1500);
+    bytes[bytes.length - 1] ^= 1;
+    expect(() => decodeFlac(bytes)).toThrow('FLAC frame CRC mismatch');
+  });
+
   it('encodes 24-bit noise with wide Rice parameters losslessly', () => {
     const noise = Float32Array.from(tone(9000, 7), (value) => value * 0.99);
     const decoded = decodeFlac(encodeFlac(noise, 96000, { bitDepth: 24 }));
@@ -462,6 +525,32 @@ describe('audio format registry', () => {
       expect(decoded.samples.length).toBe(64);
     }
     expect(() => decodeAudio(new Uint8Array(64))).toThrow();
+  });
+
+  it('decodes mono output into reusable storage without affecting owned results', () => {
+    const left = tone(67, 3);
+    const right = tone(67, 5);
+    const output = new Float32Array(75).fill(NaN);
+    const allocate = (length) => output.subarray(4, 4 + length);
+    for (const format of AUDIO_FORMAT_NAMES) {
+      const options = { format, sampleRate: 8000, channels: 2, bitDepth: 16 };
+      for (const length of [67, 13]) {
+        const bytes = encodeAudio(
+          [left.subarray(0, length), right.subarray(0, length)],
+          8000,
+          options
+        );
+        const input = new Uint8Array(bytes.length + 3);
+        input.set(bytes, 3);
+        const view = input.subarray(3);
+        const owned = decodeAudio(view, options);
+        const borrowed = decodeAudioWithStorage(view, options, allocate);
+        expect(borrowed).toEqual(owned);
+        expect(borrowed.samples.buffer).toBe(output.buffer);
+        output.fill(NaN);
+        expect(owned).toEqual(decodeAudio(view, options));
+      }
+    }
   });
 
   it('infers formats from file names', () => {

@@ -25,6 +25,10 @@ import {
 import { createRandom, randomNormal } from '../src/random.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
 import { sampleState, tractShape } from '../src/articulation/tract-shape.js';
+import {
+  trackBatchFormants,
+  trackFirstFormant,
+} from '../src/recognition/formants.js';
 import { gridFormants, plannedFormants } from './helpers/recognition-truth.js';
 
 const TEXT =
@@ -56,6 +60,27 @@ function render(text, head, sampleRate, durations) {
   });
   return { plan, samples, head, sampleRate };
 }
+
+it('shares formant roots across growing previews without changing tracks', () => {
+  const sampleRate = 8000;
+  const { samples } = render('ama', presetHeadConfig('male'), sampleRate);
+  const analyzer = createFrameAnalyzer(sampleRate, { maxSeconds: 2 });
+  for (let at = 0; at < samples.length; at += 800) {
+    analyzer.push(samples.subarray(at, at + 800));
+    const { frames } = analyzer;
+    const options = { vocalTractLength: at ? 16.5 : null };
+    const full = trackFormants(frames, options);
+    expect(trackBatchFormants(frames, options, true)).toEqual(full);
+    const first = trackFirstFormant(frames, options, 'growing');
+    const rows = { length: frames.count };
+    expect(first.frequency).toEqual(
+      Float32Array.from(rows, (_, t) => full.frequency[t * 4])
+    );
+    expect(first.valid).toEqual(
+      Uint8Array.from(rows, (_, t) => full.valid[t * 4])
+    );
+  }
+});
 
 /** Median of the finite values of `list`. */
 function median(list) {

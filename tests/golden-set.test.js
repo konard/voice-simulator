@@ -36,7 +36,7 @@ import { loadRegistry } from '../scripts/datasets.mjs';
 import { decodeFlac } from '../src/audio/flac.js';
 import { encodeWav } from '../src/audio/wav.js';
 import { parseIpa } from '../src/ipa/parse.js';
-import { isReviewed, loadGolden } from './helpers/golden.js';
+import { goldenRecordings, isReviewed, loadGolden } from './helpers/golden.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
 const manifest = loadManifest();
@@ -55,6 +55,23 @@ function toneGapTone(seconds, gap, amplitude = 0.3) {
   }
   return samples;
 }
+
+it('reads the same golden recordings in manifest order with reusable storage', async () => {
+  const options = { lang: 'en', limit: 2 };
+  const expected = loadGolden(options);
+  const storage = new Float32Array(
+    Math.max(...expected.map(({ samples }) => samples.length))
+  );
+  let i = 0;
+  for await (const item of goldenRecordings({
+    ...options,
+    storage: (length) => storage.subarray(0, length),
+  })) {
+    expect(item.samples.buffer).toBe(storage.buffer);
+    expect(item).toEqual(expected[i++]);
+  }
+  expect(i).toBe(expected.length);
+});
 
 describe('golden set', () => {
   it('manifest is complete', () => {

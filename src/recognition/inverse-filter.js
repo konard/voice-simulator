@@ -8,10 +8,11 @@ import {
   block,
   hann,
   highPass,
-  createIaif,
+  IaifWorkspace,
   correlationPlan,
   harmonics,
   cppPlan,
+  cepstralPeak,
   hnr,
   filter,
   integrate,
@@ -31,6 +32,7 @@ const MEASURES = [
   'cpp',
 ];
 const SOURCE_MEASURES = ['rd', 'oq', 'naq', 'h1h2', 'h1h2Source'];
+const MODE_MEASURES = ['h1h2Source', 'hnr', 'cpp'];
 
 export function rdToTenseness(rd) {
   return 1 - rd / 3;
@@ -77,7 +79,7 @@ function lfModels() {
 }
 function fitPulse(h) {
   const mean = h.reduce((a, b) => a + b, 0) / h.length;
-  let fitted;
+  let best;
   let fit = Infinity;
   for (const model of lfModels()) {
     const m = model.means[h.length - 1];
@@ -88,26 +90,29 @@ function fitPulse(h) {
     error = Math.sqrt(error / h.length);
     if (error < fit) {
       fit = error;
-      fitted = model;
+      best = model;
     }
   }
-  return { rd: fitted?.rd, oq: fitted?.oq, fit };
+  return { rd: best?.rd, oq: best?.oq, fit };
 }
 function localPitch(frames, o) {
   const f0 = new Float32Array(frames.count);
   const length = Math.round(
     Math.max(frames.window, 1.5 / o.minF0) * frames.rate
   );
-  const plan = o.pitch ? null : correlationPlan(length);
+  const correlate = o.pitch ? null : correlationPlan(length);
+  const firstLag = Math.ceil(frames.rate / o.maxF0);
+  const lastLag = Math.floor(frames.rate / o.minF0);
   for (let t = 0; t < frames.count; t++) {
     if (o.pitch) {
       f0[t] = suppliedPitch(o.pitch.f0[t], frames.rate);
     } else if (frames.speech[t] && frames.periodicity[t] >= 0.5) {
-      const r = plan.measure(
-        block(frames.samples, Math.round(t * frames.hop * frames.rate), length)
+      const r = correlate(
+        frames.samples,
+        Math.round(t * frames.hop * frames.rate)
       );
-      let lag = Math.ceil(frames.rate / o.maxF0);
-      for (let k = lag + 1; k <= Math.floor(frames.rate / o.minF0); k++) {
+      let lag = firstLag;
+      for (let k = lag + 1; k <= lastLag; k++) {
         if (r[k] > r[lag]) {
           lag = k;
         }
@@ -123,84 +128,234 @@ function localPitch(frames, o) {
       f0[t] = frames.rate / (lag + offset);
     }
   }
-  if (o.pitch) {
-    return f0;
-  }
-  return f0.map((value, t) => {
-    if (!value) {
-      return 0;
-    }
-    const values = Array.from(f0.subarray(Math.max(0, t - 2), t + 3))
-      .filter((v) => v > 0)
-      .sort((a, b) => a - b);
-    return values[Math.floor(values.length / 2)];
-  });
-}
-function recoveryPlan(length, history, o) {
-  const window = hann(length);
-  const extended = new Float64Array(history + length);
-  const extendedWindow = new Float64Array(extended.length);
-  extendedWindow.set(window, history);
-  const extract = createIaif(
-    extendedWindow,
-    o.tractOrder,
-    o.glottisOrder,
-    o.leak
-  );
-  return { window, extended, extract };
+  return o.pitch ? f0 : smoothPitch(f0);
 }
 
-function recover(frames, f0, o) {
-  const x = highPass(
-    frames.samples.subarray(0, frames.sampleCount),
-    frames.rate
-  );
-  const d = new Float64Array(x.length);
-  const g = new Float64Array(x.length);
-  const weight = new Float64Array(x.length);
+function smoothPitch(f0) {
+  const sorted = new Float32Array(5);
+  const median = new Float32Array(f0.length);
+  for (let t = 0; t < f0.length; t++) {
+    if (!f0[t]) {
+      continue;
+    }
+    let count = 0;
+    for (let n = Math.max(0, t - 2); n < Math.min(f0.length, t + 3); n++) {
+      const value = f0[n];
+      if (value > 0) {
+        let i = count++;
+        for (; i > 0 && sorted[i - 1] > value; i--) {
+          sorted[i] = sorted[i - 1];
+        }
+        sorted[i] = value;
+      }
+    }
+    median[t] = sorted[Math.floor(count / 2)];
+  }
+  return median;
+}
+let inverseScratch;
+// Cache a working buffer up to 8 MiB, enough for 32 s of two-column
+// source recovery at 16 kHz. Larger recordings use per-call storage.
+const RECOVERY_CELLS = 1024 * 1024;
+
+function takeRecoveryScratch(cells) {
+  if (cells > RECOVERY_CELLS) {
+    return new Float64Array(cells);
+  }
+  const scratch =
+    inverseScratch?.length >= cells
+      ? inverseScratch
+      : new Float64Array(Math.min(RECOVERY_CELLS, Math.max(2048, cells * 2)));
+  // A trace can call inverseFilter again while this workspace is in use.
+  inverseScratch = undefined;
+  return scratch;
+}
+
+function releaseRecoveryScratch(scratch) {
+  if (
+    scratch &&
+    scratch.length <= RECOVERY_CELLS &&
+    (!inverseScratch || inverseScratch.length < scratch.length)
+  ) {
+    inverseScratch = scratch;
+  }
+}
+
+function minimumVoicedPitch(f0) {
+  let lowest = Infinity;
+  for (let i = 0; i < f0.length; i++) {
+    const pitch = f0[i];
+    if (pitch > 0 && pitch < lowest) {
+      lowest = pitch;
+    }
+  }
+  return lowest;
+}
+
+function loadRecoveryWindow(samples, buffer, length, offset) {
+  const first = Math.max(0, -offset);
+  const last = Math.min(length, samples.length - offset);
+  buffer.fill(0, 0, first);
+  buffer.fill(0, last, length);
+  for (let i = first; i < last; i++) {
+    buffer[i] = samples[offset + i];
+  }
+}
+
+function addRecoveryWindow(state, pulse, window, start, end, history) {
+  const { d, g, weight, ring } = state;
+  for (let index = Math.max(0, start); index < end; index++) {
+    const i = index - start + history;
+    const w = window[i];
+    const slot = index % weight.length;
+    d[ring ? slot : index] += w * pulse.d[i];
+    if (g) {
+      g[index] += w * pulse.g[i];
+    }
+    weight[slot] += w;
+  }
+}
+
+function recover(
+  frames,
+  f0,
+  o,
+  scratch,
+  { stationary, lowestPitch, allocate }
+) {
+  const n = frames.sampleCount;
+  const derivativeOnly = stationary !== undefined;
+  const roundAsReady = derivativeOnly && stationary.length === 0;
+  const x = highPass(frames.samples, frames.rate, scratch.subarray(0, n));
+  const g = derivativeOnly ? null : scratch.subarray(2 * n, 3 * n).fill(0);
+  const width = recoveryLength(lowestPitch, frames.rate);
   const history = Math.round(0.05 * frames.rate);
-  let plan;
+  const weight = allocate('weight', Math.max(1, Math.min(n, width))).fill(0);
+  // After the last window touching a sample, mode measurements need only its
+  // rounded derivative. Keep doubles for the optional stationary blend.
+  const d = roundAsReady
+    ? allocate('derivativeRing', weight.length).fill(0)
+    : scratch.subarray(n, 2 * n).fill(0);
+  const derivative = roundAsReady
+    ? new Float32Array(x.buffer, x.byteOffset, n)
+    : d;
+  // Derivative n occupies source cell floor(n / 2). For n at least twice
+  // the filter history, that cell precedes all later windows.
+  const prefix = roundAsReady
+    ? new Float32Array(Math.min(n, 2 * history))
+    : undefined;
+  const overlap = { d, g, weight, ring: roundAsReady };
+  const normalize = normalizer(frames, f0, overlap, derivative, prefix);
+  const iaif = new IaifWorkspace(
+    o.tractOrder,
+    o.glottisOrder,
+    o.leak,
+    !derivativeOnly,
+    allocate
+  );
+  let buffer;
   for (let time = 0; time < x.length / frames.rate; time += o.step) {
     const row = Math.min(f0.length - 1, Math.round(time / frames.hop));
     if (!(f0[row] > 0)) {
       continue;
     }
     const centre = Math.round(time * frames.rate);
-    const length = Math.round(Math.max(0.032, 2.5 / f0[row]) * frames.rate);
-    if (plan?.window.length !== length) {
-      plan = recoveryPlan(length, history, o);
-    }
+    const length = recoveryLength(f0[row], frames.rate);
+    const window = windowAt(length, history);
     const start = centre - Math.floor(length / 2);
-    const { window, extended, extract } = plan;
-    for (let n = 0; n < extended.length; n++) {
-      extended[n] = x[start - history + n] ?? 0;
-    }
-    const pulse = extract(extended);
-    for (let n = 0; n < length; n++) {
-      const index = start + n;
-      if (index >= 0 && index < x.length) {
-        const weightAtSample = window[n];
-        d[index] += weightAtSample * pulse.d[n + history];
-        g[index] += weightAtSample * pulse.g[n + history];
-        weight[index] += weightAtSample;
+    // No window at this or a subsequent centre reaches before this sample.
+    normalize(Math.max(0, centre - Math.floor(width / 2)));
+    buffer ??= allocate('recoveryWindow', width + history);
+    loadRecoveryWindow(x, buffer, window.length, start - history);
+    const pulse = iaif.run(buffer, window);
+    const end = Math.min(x.length, start + length);
+    addRecoveryWindow(overlap, pulse, window, start, end, history);
+  }
+  normalize(n);
+  if (prefix) {
+    derivative.set(prefix);
+  }
+  return finishRecovery(frames, f0, o, stationary, { x, d, g, derivative });
+}
+
+function finishRecovery(frames, f0, o, stationary, { x, d, g, derivative }) {
+  if (d !== derivative) {
+    return { flowDerivative: derivative };
+  }
+  refineStationary(
+    frames,
+    o,
+    x,
+    d,
+    g,
+    stationary ?? steadySpans(frames, f0, o)
+  );
+  if (stationary !== undefined) {
+    // x is no longer needed. Its prefix can hold the rounded derivative
+    // until the caller has measured the requested spectral frames.
+    const flowDerivative = new Float32Array(x.buffer, x.byteOffset, x.length);
+    flowDerivative.set(d);
+    return { flowDerivative };
+  }
+  return {
+    flow: Float32Array.from(g),
+    flowDerivative: Float32Array.from(d),
+  };
+}
+
+function recoveryLength(pitch, rate) {
+  return Math.round(Math.max(0.032, 2.5 / pitch) * rate);
+}
+
+function normalizer(frames, f0, { d, g, weight, ring }, derivative, prefix) {
+  const hopSamples = frames.rate * frames.hop;
+  let n = 0;
+  function write(end, output) {
+    for (; n < end; n++) {
+      const slot = n % weight.length;
+      const scale = weight[slot];
+      const row = Math.min(f0.length - 1, Math.round(n / hopSamples));
+      const voiced = scale > 0.01 && f0[row] > 0;
+      const index = ring ? slot : n;
+      output[n] = voiced ? d[index] / scale : 0;
+      if (ring) {
+        d[index] = 0;
       }
+      if (g) {
+        g[n] = voiced ? g[n] / scale : 0;
+      }
+      weight[slot] = 0;
     }
   }
-  for (let n = 0; n < x.length; n++) {
-    const row = Math.min(
-      f0.length - 1,
-      Math.round(n / (frames.rate * frames.hop))
-    );
-    if (weight[n] > 0.01 && f0[row] > 0) {
-      d[n] /= weight[n];
-      g[n] /= weight[n];
-    } else {
-      d[n] = 0;
-      g[n] = 0;
+  return (end) => {
+    if (prefix && n < prefix.length) {
+      write(Math.min(end, prefix.length), prefix);
     }
+    write(end, derivative);
+  };
+}
+
+const windows = new Map();
+const WINDOW_LIMIT = 1024 * 1024;
+let windowBytes = 0;
+
+function windowAt(length, prefix = 0) {
+  // At the supported rates and pitches both lengths fit in 13 bits.
+  const key = prefix * 8192 + length;
+  const cached = windows.get(key);
+  if (cached) {
+    return cached;
   }
-  refineStationary(frames, f0, o, x, d, g);
-  return { flow: Float32Array.from(g), flowDerivative: Float32Array.from(d) };
+  const window = new Float64Array(length + prefix);
+  hann(length, prefix ? window.subarray(prefix) : window);
+  while (windowBytes + window.byteLength > WINDOW_LIMIT) {
+    const oldest = windows.keys().next().value;
+    windowBytes -= windows.get(oldest).byteLength;
+    windows.delete(oldest);
+  }
+  windows.set(key, window);
+  windowBytes += window.byteLength;
+  return window;
 }
 function steadySpectrum(frames, first, last, pitch) {
   const { rate, hop } = frames;
@@ -226,14 +381,12 @@ function steadySpectrum(frames, first, last, pitch) {
   }
   return true;
 }
-/** A single tract can be identified over a steady voiced stretch. Moving
- * speech keeps the four-stage IAIF result. The stationarity gate compares
- * pitch and centred speech harmonic levels at three separated positions. */
-function refineStationary(frames, f0, o, x, d, g) {
+/** Candidates for a single tract model require steady pitch and harmonics. */
+function* steadySpans(frames, f0, o) {
   if (o.tractOrder > 32) {
     return;
   }
-  const { rate, hop } = frames;
+  const { hop } = frames;
   for (let t = 0; t < f0.length; ) {
     if (!f0[t]) {
       t++;
@@ -246,15 +399,21 @@ function refineStationary(frames, f0, o, x, d, g) {
     if ((t - first) * hop < 0.2) {
       continue;
     }
-    const centre = Math.round(((first + t - 1) * hop * rate) / 2);
     const pitch = f0[Math.floor((first + t - 1) / 2)];
     if (!f0.subarray(first, t).every((v) => Math.abs(v / pitch - 1) <= 0.01)) {
       continue;
     }
-    const length = Math.round(0.064 * rate);
-    if (!steadySpectrum(frames, first, t, pitch)) {
-      continue;
+    if (steadySpectrum(frames, first, t, pitch)) {
+      yield { first, end: t, pitch };
     }
+  }
+}
+
+function refineStationary(frames, o, x, d, g, spans) {
+  const { rate, hop } = frames;
+  const length = Math.round(0.064 * rate);
+  for (const { first, end, pitch } of spans) {
+    const centre = Math.round(((first + end - 1) * hop * rate) / 2);
     const seed = minimum(
       d,
       centre - (0.5 * rate) / pitch,
@@ -276,17 +435,22 @@ function refineStationary(frames, f0, o, x, d, g) {
       continue;
     }
     const left = Math.max(0, Math.round((first - 0.5) * hop * rate));
-    const right = Math.min(x.length, Math.round((t - 0.5) * hop * rate));
+    const right = Math.min(x.length, Math.round((end - 0.5) * hop * rate));
     const history = Math.round(0.05 * rate);
     const start = Math.max(0, left - history);
     const residual = filter(x.subarray(start, right), fit.a);
-    const flow = integrate(residual, o.leak);
     const fade = Math.round(0.032 * rate);
-    for (let n = left; n < right; n++) {
-      const mix = Math.min(1, (n - left) / fade, (right - 1 - n) / fade);
-      d[n] = d[n] * (1 - mix) + residual[n - start] * mix;
-      g[n] = g[n] * (1 - mix) + flow[n - start] * mix;
+    mixRecovery(d, residual, left, right, start, fade);
+    if (g) {
+      mixRecovery(g, integrate(residual, o.leak), left, right, start, fade);
     }
+  }
+}
+
+function mixRecovery(output, residual, left, right, start, fade) {
+  for (let n = left; n < right; n++) {
+    const mix = Math.min(1, (n - left) / fade, (right - 1 - n) / fade);
+    output[n] = output[n] * (1 - mix) + residual[n - start] * mix;
   }
 }
 function minimum(x, first, last) {
@@ -376,10 +540,16 @@ function lowBand(frames, f0) {
     if (!f0[t]) {
       continue;
     }
-    const average = (indices) =>
-      indices.reduce((v, m) => v + frames.mel[t * bands + m], 0) /
-      indices.length;
-    sum += average(low) - average(mid);
+    const row = t * bands;
+    let lowSum = 0;
+    for (let i = 0; i < low.length; i++) {
+      lowSum += frames.mel[row + low[i]];
+    }
+    let midSum = 0;
+    for (let i = 0; i < mid.length; i++) {
+      midSum += frames.mel[row + mid[i]];
+    }
+    sum += lowSum / low.length - midSum / mid.length;
     count++;
   }
   return !count || sum / count >= -4.6;
@@ -416,124 +586,137 @@ export function inverseFilter(frames, options = {}) {
   );
 }
 
-/** Measure the three source cues used by speech-mode recognition at vowel rows. */
-export function inverseFilterModeCues(frames, rows, options) {
-  if (options.kernels?.module) {
-    return inverseFilter(frames, options);
-  }
+/** The three source columns used by voice-mode classification at vowel rows. */
+export function inverseModeMeasures(frames, options, rows) {
   const o = settings(frames, options);
-  const { count, rate, hop, sampleCount } = frames;
-  const samples = frames.samples.subarray(0, sampleCount);
-  const f0 = localPitch(frames, o);
-  const result = {
-    h1h2Source: new Float32Array(count).fill(NaN),
-    hnr: new Float32Array(count).fill(NaN),
-    cpp: new Float32Array(count).fill(NaN),
-  };
-  if (!rows.some((t) => f0[t] > 0)) {
-    return result;
+  if (options.kernels?.module) {
+    return inverseFilterRust(
+      options.kernels.module,
+      frames,
+      o,
+      MEASURES,
+      MODE_MEASURES,
+      rows
+    );
   }
-  const d = lowBand(frames, f0)
-    ? recover({ ...frames, samples }, f0, o).flowDerivative
-    : null;
-  const cpp = cppPlan(rate, o.minF0, o.maxF0);
-  const windows = new Map();
-  for (const t of rows) {
-    if (!f0[t]) {
-      continue;
-    }
-    const centre = Math.round(t * hop * rate);
-    const period = rate / f0[t];
-    if (d && Math.floor(0.45 * period) >= 2) {
-      const source = block(d, centre, Math.round(2 * period));
-      const h = harmonics(source, rate, f0[t], 2);
-      result.h1h2Source[t] = h[0] - h[1];
-    }
-    const length = Math.round(6 * period);
-    if (!windows.has(length)) {
-      windows.set(length, hann(length));
-    }
-    result.hnr[t] = hnr(samples, centre, period, windows.get(length));
-    result.cpp[t] = cpp(samples, centre);
-  }
-  return result;
+  return inverseFilterJs(
+    { ...frames, samples: frames.samples.subarray(0, frames.sampleCount) },
+    o,
+    true,
+    rows
+  );
 }
 
-function inverseFilterJs(frames, o) {
-  const { rate, hop, count, startTime } = frames;
+function inverseFilterJs(frames, o, modesOnly = false, rows) {
   const f0 = localPitch(frames, o);
+  const hasLowBand = lowBand(frames, f0);
+  const recoverSource =
+    !modesOnly ||
+    (hasLowBand && (rows ? rows.some((t) => f0[t]) : f0.some(Boolean)));
+  const stationary =
+    recoverSource && modesOnly ? [...steadySpans(frames, f0, o)] : undefined;
+  const columns = modesOnly ? (stationary?.length ? 2 : 1) : 3;
+  const scratch = recoverSource
+    ? takeRecoveryScratch(frames.sampleCount * columns)
+    : null;
+  const work = spareWindows ?? new Map();
+  spareWindows = undefined;
+  try {
+    return inverseMeasures(frames, o, {
+      f0,
+      hasLowBand,
+      modesOnly,
+      rows,
+      scratch,
+      stationary,
+      allocate: (name, length) => inverseColumn(work, name, length),
+    });
+  } finally {
+    spareWindows = work;
+    releaseRecoveryScratch(scratch);
+  }
+}
+
+let spareWindows;
+const MAX_WINDOW_CELLS = 16384;
+
+// One set of short analysis windows can be shared by sequential recordings.
+// A call from a trace receives its own storage while the outer set is in use.
+function inverseColumn(work, name, length) {
+  if (length > MAX_WINDOW_CELLS) {
+    return new Float64Array(length);
+  }
+  let column = work.get(name);
+  if (!column || column.length < length) {
+    column = new Float64Array(2 ** Math.ceil(Math.log2(Math.max(1, length))));
+    work.set(name, column);
+  }
+  return column.length === length ? column : column.subarray(0, length);
+}
+
+function inverseMeasures(
+  frames,
+  o,
+  { f0, hasLowBand, modesOnly, rows, scratch, stationary, allocate }
+) {
+  const { rate, hop, count, startTime } = frames;
+  const lowestPitch = minimumVoicedPitch(f0);
   const result = {
     hop,
     startTime,
     count,
     rate,
-    ...recover(frames, f0, o),
+    ...(scratch &&
+      recover(frames, f0, o, scratch, { stationary, lowestPitch, allocate })),
     f0,
     reliable: new Uint8Array(count),
-    lowBand: lowBand(frames, f0),
+    lowBand: hasLowBand,
     summary: {},
   };
-  for (const name of MEASURES.slice(1)) {
+  const names = modesOnly ? MODE_MEASURES : MEASURES.slice(1);
+  for (const name of names) {
     result[name] = new Float32Array(count).fill(NaN);
   }
-  const { flow, flowDerivative: d } = result;
-  result.gci = closures(frames, f0, d);
-  const cpp = cppPlan(rate, o.minF0, o.maxF0);
-  const windows = new Map();
-  const windowOf = (length) => {
-    if (!windows.has(length)) {
-      windows.set(length, hann(length));
-    }
-    return windows.get(length);
+  const { flowDerivative: d } = result;
+  if (!modesOnly) {
+    result.gci = closures(frames, f0, d);
+  }
+  const cpp = cppPlan(rate, o.minF0, o.maxF0, allocate);
+  const longestPeriod = rate / lowestPitch;
+  const signal = allocate('signal', Math.round(6 * longestPeriod));
+  const sources = modesOnly
+    ? signal
+    : allocate('sources', Math.round(2 * longestPeriod));
+  const spectralPlan = {
+    scratch: signal,
+    sources,
+    frames,
+    modesOnly,
+    maxF0: o.maxF0,
   };
-  for (let t = 0; t < count; t++) {
+  const rowsCount = rows?.length ?? count;
+  for (let i = 0; i < rowsCount; i++) {
+    const t = rows ? rows[i] : i;
     if (!f0[t]) {
       continue;
     }
     const centre = Math.round(t * hop * rate);
     const period = rate / f0[t];
-    const length = Math.round(2 * period);
-    const window = windowOf(length);
-    const source = block(d, centre, length);
-    const h = harmonics(
-      source,
-      rate,
-      f0[t],
-      Math.min(10, Math.floor((0.45 * rate) / f0[t])),
-      window
-    );
-    const fit = fitPulse(h);
-    result.rd[t] = fit.rd;
-    result.oq[t] = fit.oq;
-    result.fit[t] = fit.fit;
-    result.h1h2Source[t] = h[0] - h[1];
-    const speech = harmonics(
-      block(frames.samples, centre, length),
-      rate,
-      f0[t],
-      2,
-      window
-    );
-    result.h1h2[t] = speech[0] - speech[1];
-    const g = block(flow, centre, length);
-    let lo = Infinity;
-    let hi = -Infinity;
-    let peak = 0;
-    for (let n = 0; n < length; n++) {
-      lo = Math.min(lo, g[n]);
-      hi = Math.max(hi, g[n]);
-      peak = Math.max(peak, -source[n]);
+    if (d) {
+      measureSourceFrame(result, t, centre, period, spectralPlan);
     }
-    result.naq[t] = peak > 0 ? (hi - lo) / (peak * period) : NaN;
-    result.hnr[t] = hnr(
-      frames.samples,
-      centre,
-      period,
-      windowOf(Math.round(6 * period))
-    );
-    result.cpp[t] = cpp(frames.samples, centre);
-    result.reliable[t] = f0[t] <= o.maxF0 && fit.fit <= 6 ? 1 : 0;
+    result.hnr[t] = hnr(frames.samples, centre, period, signal);
+    result.cpp[t] = cepstralPeak(cpp, frames.samples, centre);
   }
+  if (modesOnly) {
+    const { h1h2Source, hnr, cpp } = result;
+    return { h1h2Source, hnr, cpp };
+  }
+  completeInverseFilter(result, o.trace);
+  return result;
+}
+
+function completeInverseFilter(result, trace) {
   if (!result.lowBand) {
     for (const name of SOURCE_MEASURES) {
       result[name].fill(NaN);
@@ -542,12 +725,72 @@ function inverseFilterJs(frames, o) {
   for (const name of MEASURES) {
     result.summary[name] = summarize(result[name], result.reliable);
   }
-  o.trace?.({
+  trace?.({
     stage: 'complete',
-    voiced: f0.filter((v) => v > 0).length,
+    voiced: result.f0.filter((v) => v > 0).length,
     closures: result.gci.length,
     lowBand: result.lowBand,
     summary: result.summary,
   });
-  return result;
+}
+
+function measureSourceFrame(
+  result,
+  t,
+  centre,
+  period,
+  { scratch, sources, frames, modesOnly, maxF0 }
+) {
+  const { flow, flowDerivative, f0 } = result;
+  const { rate, samples } = frames;
+  const length = Math.round(2 * period);
+  const source = block(
+    flowDerivative,
+    centre,
+    length,
+    sources.subarray(0, length)
+  );
+  const window = windowAt(length);
+  const h = harmonics(
+    source,
+    rate,
+    f0[t],
+    Math.min(modesOnly ? 2 : 10, Math.floor((0.45 * rate) / f0[t])),
+    window
+  );
+  result.h1h2Source[t] = h[0] - h[1];
+  if (!modesOnly) {
+    const buffer = scratch.subarray(0, length);
+    const speech = harmonics(
+      block(samples, centre, length, buffer),
+      rate,
+      f0[t],
+      2,
+      window
+    );
+    const g = block(flow, centre, length, buffer);
+    addPulseFit(result, t, maxF0, h);
+    result.h1h2[t] = speech[0] - speech[1];
+    result.naq[t] = normalizedAmplitude(g, source, period);
+  }
+}
+
+function addPulseFit(result, t, maxF0, h) {
+  const fit = fitPulse(h);
+  result.rd[t] = fit.rd;
+  result.oq[t] = fit.oq;
+  result.fit[t] = fit.fit;
+  result.reliable[t] = result.f0[t] <= maxF0 && fit.fit <= 6 ? 1 : 0;
+}
+
+function normalizedAmplitude(flow, source, period) {
+  let lo = Infinity;
+  let hi = -Infinity;
+  let peak = 0;
+  for (let n = 0; n < flow.length; n++) {
+    lo = Math.min(lo, flow[n]);
+    hi = Math.max(hi, flow[n]);
+    peak = Math.max(peak, -source[n]);
+  }
+  return peak > 0 ? (hi - lo) / (peak * period) : NaN;
 }

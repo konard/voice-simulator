@@ -20,6 +20,7 @@ on:
           - gpu
           - lexicon
           - lowest
+          - recognition-memory-trace
         default: all
       ref:
         description: Branch or tag of this repository, or a commit on the default branch or on the branch chosen above, to test (empty = the branch chosen above)
@@ -134,7 +135,7 @@ jobs:
 
       # Suite lowest (issue 81) runs the rust-1 column on this scalar build.
       - name: Build scalar recognition WebAssembly
-        if: inputs.suite == 'recognition-performance' || inputs.suite == 'copy' || inputs.suite == 'lowest'
+        if: inputs.suite == 'recognition-performance' || inputs.suite == 'copy' || inputs.suite == 'lowest' || inputs.suite == 'recognition-memory-trace'
         run: |
           node scripts/build-wasm.mjs --require --check-size
           node scripts/build-recognition-models.mjs
@@ -172,7 +173,7 @@ jobs:
         run: deno run -A scripts/gpu-adapter.mjs
 
       - name: Run heavy checks
-        if: inputs.suite != 'recognition-performance' && (inputs.suite != 'lowest' || inputs.lowest-row == '')
+        if: inputs.suite != 'recognition-performance' && inputs.suite != 'recognition-memory-trace' && (inputs.suite != 'lowest' || inputs.lowest-row == '')
         shell: bash
         env:
           SUITE: ${{ inputs.suite }}
@@ -217,6 +218,23 @@ jobs:
           npm run example:web:build
           core=$(awk '/^Cpus_allowed_list:/ {split($2, allowed, /[-,]/); print allowed[1]}' /proc/self/status)
           taskset -c "$core" node --max-old-space-size=192 scripts/check-app-lowest.mjs --skip-build --core "$core" --out reports/heavy
+
+      - name: Trace JavaScript recognition memory
+        if: inputs.suite == 'recognition-memory-trace'
+        env:
+          UV_THREADPOOL_SIZE: '1'
+          VOICE_MEMORY_SPACES: '1'
+        run: |
+          mkdir -p reports/heavy
+          node --input-type=module -e '
+            import { BENCHMARK } from "./tests/heavy/helpers/benchmark.js";
+            import { fetchDataset } from "./scripts/datasets.mjs";
+            for (const { id, rows } of BENCHMARK.sets) await fetchDataset(id, { limit: rows });
+          '
+          core=$(awk '/^Cpus_allowed_list:/ {split($2, allowed, /[-,]/); print allowed[1]}' /proc/self/status)
+          taskset -c "$core" node --max-old-space-size=192 --trace-gc-nvp \
+            experiments/issue-173-memory.mjs recognition js full \
+            > reports/heavy/recognition-memory-trace.log 2>&1
 
       - name: Verify recognition performance targets
         if: inputs.suite == 'recognition-performance'

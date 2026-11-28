@@ -3,7 +3,7 @@
  * formant errors between two tracks.
  */
 
-import { estimateFormants } from '../acoustics/analysis.js';
+import { createFormantEstimator } from '../acoustics/analysis.js';
 import { pitchTrack } from './pitch.js';
 
 const NAMES = ['f1', 'f2', 'f3'];
@@ -21,14 +21,12 @@ const NAMES = ['f1', 'f2', 'f3'];
 export function formantTrack(samples, sampleRate, options = {}) {
   const hop = options.hop ?? 0.01;
   const pitch = options.pitch ?? pitchTrack(samples, sampleRate, { hop });
+  const estimate = createFormantEstimator(samples, sampleRate, {
+    duration: 0.03,
+    count: 3,
+  });
   return Array.from(pitch, (f0, frame) =>
-    f0 > 0
-      ? estimateFormants(samples, sampleRate, {
-          start: frame * hop,
-          duration: 0.03,
-          count: 3,
-        })
-      : null
+    f0 > 0 ? estimate(frame * hop) : null
   );
 }
 

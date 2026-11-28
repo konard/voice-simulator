@@ -1,9 +1,13 @@
 /** Build the optional cold-start data for the recognition command. Unlicense. */
 import { Buffer } from 'node:buffer';
 import { writeFileSync } from 'node:fs';
+import { serialize } from 'node:v8';
 import { gzipSync } from 'node:zlib';
 import {
+  hmmNetworkFile,
+  hmmNetworkVersion,
   packLanguageModel,
+  preparedLexiconVersion,
   recognitionDataFile,
   recognitionModelVersion,
   wordTransitionFile,
@@ -13,15 +17,27 @@ import { LANGUAGES } from '../src/g2p/index.js';
 import { packWordTransitions } from '../src/recognition/data/index.js';
 import { getLanguageModel } from '../src/recognition/language-model.js';
 import { getLexicon } from '../src/recognition/lexicon.js';
+import { packHmmArchive } from '../src/recognition/hmm-archive.js';
+import {
+  HMM_LIVE_WORDS,
+  HMM_MAX_WORDS,
+  packHmmNetwork,
+} from '../src/recognition/hmm-network.js';
 import { serializeLexicon } from '../src/recognition/prepared-lexicon.js';
 import { buildRecognitionCodebook } from './build-recognition-codebook.mjs';
+import { buildModeBaselines } from './build-mode-baselines.mjs';
 
-function write(file, rows) {
-  const asset = gzipSync(
-    Buffer.from(JSON.stringify([recognitionModelVersion, rows]))
-  );
+function writeAsset(file, bytes) {
+  const asset = gzipSync(bytes);
   writeFileSync(file, asset);
   console.log(`${file.pathname.split('/').at(-1)}: ${asset.length} bytes`);
+}
+
+function write(file, rows) {
+  writeAsset(
+    file,
+    Buffer.from(JSON.stringify([recognitionModelVersion, rows]))
+  );
 }
 
 function writeWordTransitions(language) {
@@ -40,13 +56,39 @@ function writeWordTransitions(language) {
   console.log(`${file.pathname.split('/').at(-1)}: ${asset.length} bytes`);
 }
 
-const models = Object.keys(LANGUAGES).map((language) => {
-  write(
-    recognitionDataFile(language),
-    serializeLexicon(getLexicon(language), language)
+const vocabularies = [HMM_MAX_WORDS, HMM_LIVE_WORDS];
+const hmmSizes = new Map(vocabularies.map((size) => [size, {}]));
+function writeHmm(language, maxWords) {
+  const hmm = packHmmNetwork(language, maxWords);
+  writeAsset(
+    hmmNetworkFile(language, maxWords),
+    packHmmArchive(hmm, hmmNetworkVersion, serialize)
   );
+  hmmSizes.get(maxWords)[language] = {
+    nodes: hmm.nodes.first.length,
+    states: hmm.emit.length,
+    links: hmm.wordId.length,
+  };
+}
+
+const models = Object.keys(LANGUAGES).map((language) => {
+  const lexicon = getLexicon(language);
+  writeAsset(
+    recognitionDataFile(language),
+    serialize([preparedLexiconVersion, serializeLexicon(lexicon, language)])
+  );
+  for (const maxWords of vocabularies) {
+    writeHmm(language, maxWords);
+  }
   writeWordTransitions(language);
   return [language, packLanguageModel(getLanguageModel(language))];
 });
+for (const [maxWords, sizes] of hmmSizes) {
+  writeAsset(
+    hmmNetworkFile('index', maxWords),
+    Buffer.from(JSON.stringify([hmmNetworkVersion, sizes]))
+  );
+}
 write(recognitionDataFile('models'), models);
 buildRecognitionCodebook();
+buildModeBaselines();

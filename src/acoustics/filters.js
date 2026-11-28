@@ -17,16 +17,15 @@ export function createNoise(seed = 1) {
 }
 
 export class Biquad {
+  // The last two inputs, followed by the last two outputs.
+  #history = new Float64Array(4);
+
   constructor() {
     this.b0 = 1;
     this.b1 = 0;
     this.b2 = 0;
     this.a1 = 0;
     this.a2 = 0;
-    this.x1 = 0;
-    this.x2 = 0;
-    this.y1 = 0;
-    this.y2 = 0;
   }
 
   setCoefficients(b0, b1, b2, a0, a1, a2) {
@@ -81,23 +80,21 @@ export class Biquad {
   }
 
   process(input) {
+    const history = this.#history;
     const output =
       this.b0 * input +
-      this.b1 * this.x1 +
-      this.b2 * this.x2 -
-      this.a1 * this.y1 -
-      this.a2 * this.y2;
-    this.x2 = this.x1;
-    this.x1 = input;
-    this.y2 = this.y1;
-    this.y1 = output;
+      this.b1 * history[0] +
+      this.b2 * history[1] -
+      this.a1 * history[2] -
+      this.a2 * history[3];
+    history[1] = history[0];
+    history[0] = input;
+    history[3] = history[2];
+    history[2] = output;
     return output;
   }
 
   reset() {
-    this.x1 = 0;
-    this.x2 = 0;
-    this.y1 = 0;
-    this.y2 = 0;
+    this.#history.fill(0);
   }
 }

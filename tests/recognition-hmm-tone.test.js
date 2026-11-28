@@ -93,21 +93,22 @@ it('resets reused search buffers between recordings and networks', () => {
     model.lda
   );
   const open = getNetwork(model, ['en'], { maxWords: 200 });
-  const closed = getNetwork(model, ['en'], { maxWords: 200, oov: false });
   const cache = new Map();
   const expected = decodeWords(open, feats, frames, { tone });
 
   decodeWords(open, feats, Math.floor(frames / 2), { maxActive: 16 }, cache);
-  const openBuffers = cache.get(open.language);
+  const openBuffers = cache.get(open.nodes.language);
+  assert.ok(openBuffers);
   const sameGraph = getNetwork(model, ['en'], { maxWords: 200 });
   assert.deepEqual(
     decodeWords(sameGraph, feats, frames, { tone }, cache),
     expected
   );
-  assert.ok(cache.get(sameGraph.language) === openBuffers);
+  assert.ok(cache.get(sameGraph.nodes.language) === openBuffers);
+  const closed = getNetwork(model, ['en'], { maxWords: 200, oov: false });
   decodeWords(closed, feats, frames, { tone }, cache);
   assert.equal(cache.size, 1);
-  assert.ok(cache.has(closed.language));
+  assert.ok(cache.has(closed.nodes.language));
   assert.deepEqual(decodeWords(open, feats, frames, { tone }, cache), expected);
 });
 

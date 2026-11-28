@@ -225,27 +225,48 @@ function windowCorrelation(window, maxLag) {
   return result;
 }
 
-/** Vertex of the parabola through (−1, a), (0, b), (1, c): [offset, top]. */
-function parabola(a, b, c) {
+const pitchWindows = new Map();
+
+function pitchWindow(length, maxLag) {
+  const key = `${length}/${maxLag}`;
+  if (!pitchWindows.has(key)) {
+    if (pitchWindows.size === 8) {
+      pitchWindows.delete(pitchWindows.keys().next().value);
+    }
+    const window = hannWindow(length);
+    pitchWindows.set(key, {
+      window,
+      correlation: windowCorrelation(window, maxLag),
+    });
+  }
+  return pitchWindows.get(key);
+}
+
+/** Write [offset, top] of the parabola through (−1, a), (0, b), (1, c). */
+function parabola(a, b, c, peak) {
   const curvature = a - 2 * b + c;
   if (!(curvature < 0)) {
-    return [0, b];
+    peak[0] = 0;
+    peak[1] = b;
+    return;
   }
   const offset = (0.5 * (a - c)) / curvature;
-  return [offset, b - 0.25 * (a - c) * offset];
+  peak[0] = offset;
+  peak[1] = b - 0.25 * (a - c) * offset;
 }
 
 /** Empty track of `capacity` rows. */
-function createTrack(frames, settings) {
-  const rows = frames.capacity;
+function createTrack(frames, settings, rows, storage) {
   return {
     hop: settings.hop,
     startTime: frames.startTime,
     count: 0,
     committed: 0,
-    f0: new Float32Array(rows),
-    voicing: new Float32Array(rows),
-    strength: new Float32Array(rows),
+    f0: storage?.('pitch:f0', rows, Float32Array) ?? new Float32Array(rows),
+    voicing:
+      storage?.('pitch:voicing', rows, Float32Array) ?? new Float32Array(rows),
+    strength:
+      storage?.('pitch:strength', rows, Float32Array) ?? new Float32Array(rows),
     marks: new Float64Array(0),
     jitter: null,
     shimmer: null,
@@ -258,6 +279,17 @@ function createTrack(frames, settings) {
 /** Working sample `index` of `frames`, 0 outside the received samples. */
 function sampleAt(frames, index) {
   return index >= 0 && index < frames.sampleCount ? frames.samples[index] : 0;
+}
+
+function samplePeak(samples, start, end, prior) {
+  let peak = prior;
+  for (let n = start; n < end; n++) {
+    const magnitude = Math.abs(samples[n]);
+    if (magnitude > peak || Number.isNaN(magnitude)) {
+      peak = magnitude;
+    }
+  }
+  return peak;
 }
 
 /**
@@ -281,50 +313,85 @@ function quietness(frames, settings, t) {
   );
 }
 
+function decimateTail(frames, kernel, factor, start, coarse, kept) {
+  const { samples, sampleCount } = frames;
+  const half = (kernel.length - 1) / 2;
+  for (let n = kept; n < coarse.length; n++) {
+    const first = (start + n) * factor - half;
+    const from = Math.max(0, -first);
+    const to = Math.min(kernel.length, sampleCount - first);
+    let sum = 0;
+    for (let k = from; k < to; k++) {
+      sum += kernel[k] * samples[first + k];
+    }
+    coarse[n] = sum;
+  }
+}
+
+function windowCoarse(coarse, window, re) {
+  let mean = 0;
+  for (let n = 0; n < coarse.length; n++) {
+    mean += coarse[n];
+  }
+  mean /= coarse.length;
+  for (let n = 0; n < coarse.length; n++) {
+    re[n] = (coarse[n] - mean) * window[n];
+  }
+}
+
+function autocorrelate(fft, re, im, correlation, q, { lagMin, lagMax }) {
+  fft.forward(re, im);
+  for (let k = 0; k < re.length; k++) {
+    re[k] = re[k] * re[k] + im[k] * im[k];
+    im[k] = 0;
+  }
+  fft.inverse(re, im);
+  const energy = re[0];
+  if (!(energy > 0)) {
+    return false;
+  }
+  for (let lag = lagMin - 1; lag <= lagMax + 1; lag++) {
+    q[lag] = re[lag] / (energy * correlation[lag]);
+  }
+  return true;
+}
+
 /**
  * The coarse signal (low-passed, every `factor`-th sample, computed as the
  * samples arrive) and the normalised autocorrelation of its Hann-windowed
  * frames by the transform.
  */
-function createCoarseCorrelator(frames, settings) {
+function createCoarseCorrelator(frames, settings, buffers) {
   const { factor, coarseLength, size, lagMax } = settings;
-  const samples = frames.samples;
   const { kernel, half } = coarseKernel(factor);
-  const window = hannWindow(coarseLength);
-  const correlation = windowCorrelation(window, lagMax + 1);
+  const { window, correlation } = pitchWindow(coarseLength, lagMax + 1);
   const fft = createFft(size);
-  const re = new Float64Array(size);
-  const im = new Float64Array(size);
+  const { re, im, coarse } = buffers;
   const frameHalf = Math.floor(coarseLength / 2);
-  const margin = frameHalf + 2;
-  const coarse = new Float64Array(
-    margin + Math.ceil((samples.length + settings.fullLength) / factor) + 4
-  );
-  let done = -margin;
+  let previous = -Infinity;
 
-  /** Fill the coarse signal up to index `last` (inclusive). */
-  function fill(last) {
-    if (settings.dsp && done <= last) {
-      const output = coarse.subarray(done + margin, last + margin + 1);
-      settings.dsp.decimate(frames, kernel, half, done, output);
-      done = last + 1;
+  /** Keep the overlap with the previous window and fill its new tail. */
+  function fill(start) {
+    const shift = start - previous;
+    previous = start;
+    if (shift === 0) {
       return;
     }
-    for (let m = done; m <= last; m++) {
-      const centre = m * factor;
-      let sum = 0;
-      if (centre - half >= 0 && centre + half < frames.sampleCount) {
-        for (let k = -half; k <= half; k++) {
-          sum += kernel[k + half] * samples[centre + k];
-        }
-      } else {
-        for (let k = -half; k <= half; k++) {
-          sum += kernel[k + half] * sampleAt(frames, centre + k);
-        }
-      }
-      coarse[m + margin] = sum;
+    const kept = Math.max(0, coarseLength - shift);
+    if (kept > 0) {
+      coarse.copyWithin(0, shift);
     }
-    done = Math.max(done, last + 1);
+    if (settings.dsp) {
+      settings.dsp.decimate(
+        frames,
+        kernel,
+        half,
+        start + kept,
+        coarse.subarray(kept)
+      );
+      return;
+    }
+    decimateTail(frames, kernel, factor, start, coarse, kept);
   }
 
   return {
@@ -342,50 +409,63 @@ function createCoarseCorrelator(frames, settings) {
      */
     correlate(centre, q) {
       const start = Math.round(centre / factor) - frameHalf;
-      fill(start + coarseLength - 1);
-      let mean = 0;
-      for (let n = 0; n < coarseLength; n++) {
-        mean += coarse[start + n + margin];
-      }
-      mean /= coarseLength;
-      for (let n = 0; n < coarseLength; n++) {
-        re[n] = (coarse[start + n + margin] - mean) * window[n];
-      }
+      fill(start);
+      windowCoarse(coarse, window, re);
       if (settings.dsp) {
         return settings.dsp.correlate(re, correlation, q);
       }
       re.fill(0, coarseLength);
       im.fill(0);
-      fft.forward(re, im);
-      for (let k = 0; k < size; k++) {
-        re[k] = re[k] * re[k] + im[k] * im[k];
-        im[k] = 0;
-      }
-      fft.inverse(re, im);
-      if (!(re[0] > 0)) {
-        return false;
-      }
-      for (let lag = settings.lagMin - 1; lag <= lagMax + 1; lag++) {
-        q[lag] = re[lag] / (re[0] * correlation[lag]);
-      }
-      return true;
+      return autocorrelate(fft, re, im, correlation, q, settings);
     },
   };
+}
+
+function loadPitchWindow(frames, start, window, full, frame) {
+  const { samples, sampleCount } = frames;
+  const from = Math.max(0, -start);
+  const to = Math.max(from, Math.min(full.length, sampleCount - start));
+  full.fill(0, 0, from);
+  full.fill(0, to);
+  let mean = 0;
+  let largest = 0;
+  for (let n = from; n < to; n++) {
+    const value = samples[start + n];
+    full[n] = value;
+    mean += value;
+    largest = Math.max(largest, Math.abs(value));
+  }
+  mean /= full.length;
+  let energy = 0;
+  for (let n = 0; n < full.length; n++) {
+    const value = (full[n] - mean) * window[n];
+    full[n] = value;
+    energy += value * value;
+  }
+  frame.energy = energy;
+  frame.largest = largest;
+}
+
+function lagPower(full, lag) {
+  const length = full.length - lag;
+  let sum = 0;
+  for (let n = 0; n < length; n++) {
+    sum += full[n] * full[n + lag];
+  }
+  return sum;
 }
 
 /**
  * The Hann-windowed full-rate frame without its mean, and the refinement
  * of a coarse lag on it.
  */
-function createFullFrame(frames, settings) {
+function createFullFrame(frames, settings, full) {
   const { factor, fullLength, lagMax } = settings;
-  const window = hannWindow(fullLength);
   const maxLag = factor * (lagMax + 1) + factor + 1;
-  const correlation = windowCorrelation(
-    window,
+  const { window, correlation } = pitchWindow(
+    fullLength,
     Math.min(fullLength - 1, maxLag)
   );
-  const full = new Float64Array(fullLength);
   const half = Math.floor(fullLength / 2);
   const frame = { energy: 0, largest: 0 };
 
@@ -394,11 +474,7 @@ function createFullFrame(frames, settings) {
     if (lag < 1 || lag >= correlation.length) {
       return -1;
     }
-    let sum = 0;
-    for (let n = 0; n + lag < fullLength; n++) {
-      sum += full[n] * full[n + lag];
-    }
-    return sum / (frame.energy * correlation[lag]);
+    return lagPower(full, lag) / (frame.energy * correlation[lag]);
   }
 
   return {
@@ -415,28 +491,13 @@ function createFullFrame(frames, settings) {
         settings.dsp.load(frames, start, window, correlation, frame);
         return;
       }
-      let mean = 0;
-      let largest = 0;
-      for (let n = 0; n < fullLength; n++) {
-        const value = sampleAt(frames, start + n);
-        full[n] = value;
-        mean += value;
-        largest = Math.max(largest, Math.abs(value));
-      }
-      mean /= fullLength;
-      let energy = 0;
-      for (let n = 0; n < fullLength; n++) {
-        full[n] = (full[n] - mean) * window[n];
-        energy += full[n] * full[n];
-      }
-      frame.energy = energy;
-      frame.largest = largest;
+      loadPitchWindow(frames, start, window, full, frame);
     },
-    /** Refine a coarse lag: [full-rate lag, height] or null. */
-    refine(coarseLag) {
+    /** Write [full-rate lag, height] of a valid refined maximum. */
+    refine(coarseLag, peak) {
       const centre = Math.round(coarseLag * factor);
       if (settings.dsp) {
-        return settings.dsp.refine(frame.energy, centre);
+        return settings.dsp.refine(frame.energy, centre, peak);
       }
       let best = -Infinity;
       let bestLag = -1;
@@ -448,10 +509,12 @@ function createFullFrame(frames, settings) {
         }
       }
       if (bestLag < 2) {
-        return null;
+        return false;
       }
-      const [offset, top] = parabola(at(bestLag - 1), best, at(bestLag + 1));
-      return [bestLag + offset, Math.min(1, top)];
+      parabola(at(bestLag - 1), best, at(bestLag + 1), peak);
+      peak[0] = bestLag + peak[0];
+      peak[1] = Math.min(1, peak[1]);
+      return true;
     },
   };
 }
@@ -484,39 +547,69 @@ function insertCandidate(store, row, kept, capacity, candidate) {
  * t (frequency, height, strength), their number and the strength of the
  * unvoiced candidate.
  */
-function createCandidateFinder(frames, settings, store, shared) {
+const MAX_BATCH_WINDOW_CELLS = 16384;
+
+function candidateBuffers(settings, workspace) {
+  const { size, coarseLength, fullLength } = settings;
+  const length = 2 * size + coarseLength + fullLength;
+  let data = workspace?.windows;
+  if (!data || data.length < length) {
+    data = new Float64Array(length);
+    if (workspace && length <= MAX_BATCH_WINDOW_CELLS) {
+      workspace.windows = data;
+    }
+  }
+  return {
+    re: data.subarray(0, size),
+    im: data.subarray(size, 2 * size),
+    coarse: data.subarray(2 * size, 2 * size + coarseLength),
+    full: data.subarray(2 * size + coarseLength, length),
+  };
+}
+
+function createCandidateFinder(frames, settings, store, shared, workspace) {
   const { lagMin, lagMax, rate, minF0, maxF0, octaveCost } = settings;
   const capacity = settings.candidates;
-  const coarse = createCoarseCorrelator(frames, settings);
-  const full = createFullFrame(frames, settings);
+  const buffers = candidateBuffers(settings, workspace);
+  const coarse = createCoarseCorrelator(frames, settings, buffers);
+  const full = createFullFrame(frames, settings, buffers.full);
   const q = new Float64Array(lagMax + 2);
-  // Local maxima of the coarse search: lag and height; the strongest
-  // `tried` of them are refined.
+  // Only the strongest coarse maxima reach full-rate refinement.
   const tried = 2 * capacity + 2;
-  const peakLag = new Float64Array(lagMax);
-  const peakHeight = new Float64Array(lagMax);
-  const order = [];
+  const peakLag = new Float64Array(tried);
+  const peakHeight = new Float64Array(tried);
+  const interpolated = new Float64Array(2);
   const candidate = { frequency: 0, height: 0, strength: 0 };
   const strengthOf = (height, frequency) =>
     height - octaveCost * Math.log2(maxF0 / frequency);
 
-  /** Local maxima of q, refined by a parabola, in `order` strongest
-   * first. */
+  /** Keep the strongest maxima of q, preserving lag order for ties. */
   function findMaxima() {
-    order.length = 0;
+    let count = 0;
     for (let lag = lagMin; lag <= lagMax; lag++) {
       if (q[lag] > q[lag - 1] && q[lag] >= q[lag + 1] && q[lag] > 0) {
-        const [offset, top] = parabola(q[lag - 1], q[lag], q[lag + 1]);
-        const exact = lag + offset;
-        peakLag[order.length] = exact;
-        peakHeight[order.length] = strengthOf(
-          Math.min(1, top),
+        parabola(q[lag - 1], q[lag], q[lag + 1], interpolated);
+        const exact = lag + interpolated[0];
+        const strength = strengthOf(
+          Math.min(1, interpolated[1]),
           settings.coarseRate / exact
         );
-        order.push(order.length);
+        let slot = count;
+        while (slot > 0 && peakHeight[slot - 1] < strength) {
+          if (slot < tried) {
+            peakLag[slot] = peakLag[slot - 1];
+            peakHeight[slot] = peakHeight[slot - 1];
+          }
+          slot--;
+        }
+        if (slot < tried) {
+          peakLag[slot] = exact;
+          peakHeight[slot] = strength;
+          count = Math.min(count + 1, tried);
+        }
       }
     }
-    order.sort((a, b) => peakHeight[b] - peakHeight[a] || a - b);
+    return count;
   }
 
   function scoreUnvoiced(t, largest, peak) {
@@ -560,16 +653,17 @@ function createCandidateFinder(frames, settings, store, shared) {
       if (!coarse.correlate(centre, q) || !(energy > 0)) {
         return;
       }
-      findMaxima();
       let kept = 0;
-      const count = Math.min(order.length, tried);
+      const count = findMaxima();
       for (let index = 0; index < count; index++) {
-        const coarseLag = peakLag[order[index]];
-        const refined = full.refine(coarseLag);
-        const frequency = refined === null ? 0 : rate / refined[0];
+        const coarseLag = peakLag[index];
+        if (!full.refine(coarseLag, interpolated)) {
+          continue;
+        }
+        const frequency = rate / interpolated[0];
         if (frequency >= minF0 && frequency <= maxF0) {
           candidate.frequency = frequency;
-          candidate.height = refined[1];
+          candidate.height = interpolated[1];
           // A brief resonant burst can have a strong short-lag peak. At
           // high frequencies, check that it persists for a second period.
           const second = 2 * coarseLag;
@@ -577,9 +671,9 @@ function createCandidateFinder(frames, settings, store, shared) {
           const support =
             frequency > SHORT_PERIOD_F0 && lag < lagMax
               ? q[lag] + (q[lag + 1] - q[lag]) * (second - lag)
-              : refined[1];
+              : interpolated[1];
           candidate.strength = strengthOf(
-            Math.min(refined[1], support + SECOND_PERIOD_TOLERANCE),
+            Math.min(interpolated[1], support + SECOND_PERIOD_TOLERANCE),
             frequency
           );
           kept = insertCandidate(
@@ -615,7 +709,8 @@ function crossCorrelation(frames, a, b, n) {
 function peakToPeak(frames, a, b) {
   let low = Infinity;
   let high = -Infinity;
-  for (let n = Math.round(a); n < Math.round(b); n++) {
+  const end = Math.round(b);
+  for (let n = Math.round(a); n < end; n++) {
     const value = sampleAt(frames, n);
     low = Math.min(low, value);
     high = Math.max(high, value);
@@ -626,19 +721,21 @@ function peakToPeak(frames, a, b) {
 /** Add the periods between `marks` (working samples) of one run to the
  * sums of jitter and shimmer. */
 function addPeriods(frames, sums, marks) {
+  let previousPeriod = 0;
+  let previousHeight = 0;
   for (let i = 0; i + 1 < marks.length; i++) {
     const period = marks[i + 1] - marks[i];
     const height = peakToPeak(frames, marks[i], marks[i + 1]);
     sums.periods++;
     sums.period += period;
     sums.amplitude += height;
-    if (i + 2 < marks.length) {
+    if (i > 0) {
       sums.pairs++;
-      sums.periodDiff += Math.abs(period - (marks[i + 2] - marks[i + 1]));
-      sums.amplitudeDiff += Math.abs(
-        height - peakToPeak(frames, marks[i + 1], marks[i + 2])
-      );
+      sums.periodDiff += Math.abs(previousPeriod - period);
+      sums.amplitudeDiff += Math.abs(previousHeight - height);
     }
+    previousPeriod = period;
+    previousHeight = height;
   }
 }
 
@@ -662,6 +759,7 @@ function setPerturbation(track, sums) {
 function createMarker(frames, track, settings) {
   const { rate, hopSamples } = settings;
   const runFrames = Math.ceil(MARK_RUN / settings.hop - 1e-9);
+  const interpolated = new Float64Array(2);
   let storage = new Float64Array(256);
   let length = 0;
   const sums = {
@@ -705,12 +803,13 @@ function createMarker(frames, track, settings) {
         place = p;
       }
     }
-    const [offset] = parabola(
+    parabola(
       crossCorrelation(frames, anchor, place - 1, span),
       best,
-      crossCorrelation(frames, anchor, place + 1, span)
+      crossCorrelation(frames, anchor, place + 1, span),
+      interpolated
     );
-    return place + Math.max(-0.5, Math.min(0.5, offset));
+    return place + Math.max(-0.5, Math.min(0.5, interpolated[0]));
   }
 
   /** Marks (working samples) of the run of frames a .. b. */
@@ -789,8 +888,10 @@ function createMarker(frames, track, settings) {
 /**
  * Sorted f0 values of the committed voiced frames and their percentiles.
  */
-function createDistribution(capacity) {
-  const values = new Float64Array(capacity);
+function createDistribution(capacity, storage) {
+  const values =
+    storage?.('pitch:distribution', capacity, Float64Array) ??
+    new Float64Array(capacity);
   let length = 0;
   const at = (fraction) => {
     const position = fraction * (length - 1);
@@ -818,7 +919,9 @@ function createDistribution(capacity) {
       if (length === 0) {
         return;
       }
-      [track.low, track.median, track.high] = PERCENTILES.map(at);
+      track.low = at(PERCENTILES[0]);
+      track.median = at(PERCENTILES[1]);
+      track.high = at(PERCENTILES[2]);
     },
   };
 }
@@ -829,69 +932,91 @@ function createDistribution(capacity) {
  * `step(t)` adds frame t; `trace(path, first)` writes the best path to the
  * newest frame into `path` from that frame back to `first`.
  */
-function createViterbi(store, settings, rows) {
+function createViterbi(store, settings, back) {
   const capacity = settings.candidates;
   const states = capacity + 1;
   const { voicedUnvoicedCost, octaveJumpCost } = settings;
-  const back = new Int8Array(rows * states);
+  const { count: counts, frequency, strength, unvoiced } = store;
   let previous = new Float64Array(states);
   let current = new Float64Array(states);
   let newest = -1;
 
-  /** Cost of the transition from state p of frame t - 1 to state s of t. */
-  function cost(t, s, p) {
-    const voiced = s < capacity;
-    const wasVoiced = p < capacity;
-    if (voiced && wasVoiced) {
-      const ratio =
-        store.frequency[t * capacity + s] /
-        store.frequency[(t - 1) * capacity + p];
-      return octaveJumpCost * Math.abs(Math.log2(ratio));
+  function firstFrame(count) {
+    let top = -Infinity;
+    for (let s = 0; s < count; s++) {
+      const score = 0 + strength[s];
+      current[s] = score;
+      top = Math.max(top, score);
     }
-    return voiced === wasVoiced ? 0 : voicedUnvoicedCost;
+    const score = 0 + unvoiced[0];
+    current[capacity] = score;
+    return Math.max(top, score);
   }
 
-  /** Best score into state s of frame t > 0: [score, from]. */
-  function best(t, s) {
-    const previousCount = store.count[t - 1];
+  function followingFrame(t, count) {
+    const row = t * capacity;
+    const previousRow = row - capacity;
+    const previousCount = counts[t - 1];
+    const backRow = t * states;
+    const fromUnvoiced = previous[capacity] - voicedUnvoicedCost;
+    let top = -Infinity;
+    for (let s = 0; s < count; s++) {
+      const hz = frequency[row + s];
+      let score = -Infinity;
+      let from = capacity;
+      for (let p = 0; p < previousCount; p++) {
+        const cost =
+          octaveJumpCost * Math.abs(Math.log2(hz / frequency[previousRow + p]));
+        const value = previous[p] - cost;
+        if (value > score) {
+          score = value;
+          from = p;
+        }
+      }
+      // The unvoiced state follows the voiced states, including on ties.
+      if (fromUnvoiced > score) {
+        score = fromUnvoiced;
+        from = capacity;
+      }
+      back[backRow + s] = from;
+      const emitted = score + strength[row + s];
+      current[s] = emitted;
+      top = Math.max(top, emitted);
+    }
     let score = -Infinity;
     let from = capacity;
-    for (let p = 0; p < states; p++) {
-      if (p < capacity && p >= previousCount) {
-        continue;
-      }
-      const value = previous[p] - cost(t, s, p);
+    for (let p = 0; p < previousCount; p++) {
+      const value = previous[p] - voicedUnvoicedCost;
       if (value > score) {
         score = value;
         from = p;
       }
     }
-    back[t * states + s] = from;
-    return score;
+    if (previous[capacity] > score) {
+      score = previous[capacity];
+      from = capacity;
+    }
+    back[backRow + capacity] = from;
+    const emitted = score + unvoiced[t];
+    current[capacity] = emitted;
+    return Math.max(top, emitted);
   }
 
   return {
     /** Add frame t (frames in order from 0). */
     step(t) {
-      const count = store.count[t];
-      let top = -Infinity;
-      for (let s = 0; s < states; s++) {
-        const voiced = s < capacity;
+      const count = counts[t];
+      const top = t === 0 ? firstFrame(count) : followingFrame(t, count);
+      for (let s = count; s < capacity; s++) {
         current[s] = -Infinity;
-        if (voiced && s >= count) {
-          continue;
-        }
-        const gain = voiced
-          ? store.strength[t * capacity + s]
-          : store.unvoiced[t];
-        current[s] = (t === 0 ? 0 : best(t, s)) + gain;
-        top = Math.max(top, current[s]);
       }
       // Keep the numbers small: the best path scores 0.
       for (let s = 0; s < states; s++) {
         current[s] -= top;
       }
-      [previous, current] = [current, previous];
+      const completed = current;
+      current = previous;
+      previous = completed;
       newest = t;
     },
     trace(path, first) {
@@ -967,28 +1092,64 @@ export function createPitchTracker(frames, options = {}) {
   return pitchTracker(frames, options);
 }
 
-function pitchTracker(frames, options, shared) {
+function pitchScratch(rows, capacity, workspace) {
+  const cells = rows * capacity;
+  const traces = rows * (capacity + 1);
+  const prior = workspace?.scratch;
+  if (
+    prior?.path.length >= rows &&
+    prior.store.height.length >= cells &&
+    prior.back.length >= traces
+  ) {
+    return prior;
+  }
+  const scratch = {
+    store: {
+      frequency: new Float32Array(cells),
+      height: new Float32Array(cells),
+      strength: new Float32Array(cells),
+      count: new Uint8Array(rows),
+      unvoiced: new Float32Array(rows),
+    },
+    path: new Int8Array(rows),
+    back: new Int8Array(traces),
+  };
+  if (workspace) {
+    workspace.scratch = scratch;
+  }
+  return scratch;
+}
+
+function pitchTracker(
+  frames,
+  options,
+  shared,
+  workspace,
+  frameOnly = false,
+  storage
+) {
   const settings = pitchSettings(frames, options);
   const { hop, hopSamples, lag } = settings;
   const capacity = settings.candidates;
-  const rows = frames.capacity;
-  const store = {
-    frequency: new Float32Array(rows * capacity),
-    height: new Float32Array(rows * capacity),
-    strength: new Float32Array(rows * capacity),
-    count: new Uint8Array(rows),
-    unvoiced: new Float32Array(rows),
-  };
+  const rows = frameOnly ? frames.count : frames.capacity;
+  const { store, path, back } = pitchScratch(rows, capacity, workspace);
   if (shared && !shared.source) {
     store.largest = new Float64Array(rows);
     shared.save = store;
   }
-  const path = new Int8Array(rows);
-  const viterbi = createViterbi(store, settings, rows);
-  const finder = createCandidateFinder(frames, settings, store, shared);
-  const track = createTrack(frames, settings);
-  const marker = createMarker(frames, track, settings);
-  const distribution = createDistribution(rows);
+  const viterbi = createViterbi(store, settings, back);
+  const finder = createCandidateFinder(
+    frames,
+    settings,
+    store,
+    shared,
+    workspace
+  );
+  const track = createTrack(frames, settings, rows, storage);
+  const marks = !frameOnly && !options.frameOnly;
+  const marker = marks ? createMarker(frames, track, settings) : null;
+  const distribution =
+    marks || options.percentiles ? createDistribution(rows, storage) : null;
   const offset = Math.round(frames.startTime / settings.hop);
   const base = Math.round(offset * hopSamples);
   const centre = (t) => Math.round((offset + t) * hopSamples) - base;
@@ -1011,17 +1172,25 @@ function pitchTracker(frames, options, shared) {
       track.f0[t] = voiced ? onsetFrequency(pathFrequency, hop, t, newest) : 0;
       frameScores(track, store, capacity, t, path[t]);
       if (voiced) {
-        distribution.add(track.f0[t]);
-        if (runStart < 0) {
-          runStart = t;
-        }
-      } else if (runStart >= 0) {
-        marker.run(runStart, t - 1);
-        runStart = -1;
+        distribution?.add(track.f0[t]);
+      }
+      if (marker) {
+        observeRun(voiced, t);
       }
     }
     track.committed = last;
-    distribution.update(track);
+    distribution?.update(track);
+  }
+
+  function observeRun(voiced, t) {
+    if (voiced) {
+      if (runStart < 0) {
+        runStart = t;
+      }
+    } else if (runStart >= 0) {
+      marker.run(runStart, t - 1);
+      runStart = -1;
+    }
   }
 
   return {
@@ -1034,10 +1203,13 @@ function pitchTracker(frames, options, shared) {
      * @param {boolean} [final]
      */
     advance(final = false) {
+      const sampleCount = frames.sampleCount;
+      if (peakScanned < sampleCount) {
+        peak = samplePeak(frames.samples, peakScanned, sampleCount, peak);
+        peakScanned = sampleCount;
+      }
+      const clipPeak = peak;
       withPitchDsp(options.kernels?.module, settings, () => {
-        for (; peakScanned < frames.sampleCount; peakScanned++) {
-          peak = Math.max(peak, Math.abs(frames.samples[peakScanned]));
-        }
         while (track.count < frames.count) {
           const t = track.count;
           const middle = centre(t);
@@ -1048,7 +1220,7 @@ function pitchTracker(frames, options, shared) {
           ) {
             break;
           }
-          finder.score(t, middle, peak);
+          finder.score(t, middle, clipPeak);
           viterbi.step(t);
           track.count++;
         }
@@ -1068,9 +1240,36 @@ function pitchTracker(frames, options, shared) {
  * @param {Partial<typeof PITCH_DEFAULTS>} [options]
  */
 export function trackPitch(frames, options = {}) {
-  const tracker = createPitchTracker(frames, options);
-  tracker.advance(true);
-  return tracker.track;
+  return batchPitch(frames, options, false);
+}
+
+let batchPitchWorkspace;
+
+/** Batch frame-level pitch. Consume the track before reusing caller storage. */
+export function trackPitchFrames(frames, options = {}, storage) {
+  return batchPitch(frames, options, true, storage);
+}
+
+function batchPitch(frames, options, frameOnly, storage) {
+  const workspace = batchPitchWorkspace ?? {};
+  batchPitchWorkspace = undefined;
+  try {
+    const tracker = pitchTracker(
+      frames,
+      options,
+      undefined,
+      workspace,
+      frameOnly,
+      storage
+    );
+    tracker.advance(true);
+    return tracker.track;
+  } finally {
+    // Retain scratch for typical clips. The caller owns the output columns.
+    if (workspace.scratch?.back.length <= 65536) {
+      batchPitchWorkspace = workspace;
+    }
+  }
 }
 
 /** Score shared 5 ms and 10 ms windows once, then solve their paths independently. */

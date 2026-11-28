@@ -72,6 +72,14 @@ describe('stream resampler', () => {
     expect(resampler.flush().length).toBe(0);
   });
 
+  it('preserves every sample when downsampling to an integer divisor', () => {
+    for (const from of [16000, 48000]) {
+      const input = signal(from).subarray(0, 1701);
+      const batch = resample(input, from, 8000, { zeroCrossings: 8 });
+      expect(batch).toEqual(streamed(input, from, 8000, 127));
+    }
+  });
+
   it('keeps only the input it still needs', () => {
     const resampler = createStreamResampler(8000, 48000);
     const input = signal(8000);

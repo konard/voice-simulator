@@ -22,7 +22,7 @@ import {
   emptyState,
   stateFeatures,
 } from './voice-fit-statistics.js';
-import { estimateFormants } from '../acoustics/analysis.js';
+import { createFormantEstimator } from '../acoustics/analysis.js';
 import { Biquad } from '../acoustics/filters.js';
 import { SPEED_OF_SOUND } from '../acoustics/transfer.js';
 
@@ -55,6 +55,7 @@ const HNR_PERCENTILE = 0.75;
 /** Step and half-width (samples) of the fractional lag search for HNR. */
 const LAG_STEP = 0.1;
 const LAG_SPAN = 0.6;
+const LAG_STEPS = Math.round(LAG_SPAN / LAG_STEP);
 
 /**
  * Low-pass and linearly interpolate to a lower rate (analysis quality).
@@ -70,28 +71,50 @@ export function resample(samples, sampleRate, targetRate = ANALYSIS_RATE) {
   const filters = [new Biquad(), new Biquad()];
   filters[0].lowpass(0.45 * targetRate, 0.54, sampleRate);
   filters[1].lowpass(0.45 * targetRate, 1.31, sampleRate);
-  const filtered = new Float64Array(samples.length);
-  for (let index = 0; index < samples.length; index++) {
-    filtered[index] = filters[1].process(filters[0].process(samples[index]));
-  }
   const ratio = sampleRate / targetRate;
   const output = new Float64Array(Math.floor((samples.length - 1) / ratio));
-  for (let index = 0; index < output.length; index++) {
-    const position = index * ratio;
-    const left = Math.floor(position);
-    const fraction = position - left;
-    output[index] =
-      filtered[left] * (1 - fraction) + filtered[left + 1] * fraction;
+  let index = 0;
+  let position = 0;
+  let left = 0;
+  let previous = 0;
+  for (let read = 0; read < samples.length; read++) {
+    const value = filters[1].process(filters[0].process(samples[read]));
+    if (index < output.length && read === left + 1) {
+      const fraction = position - left;
+      output[index++] = previous * (1 - fraction) + value * fraction;
+      position = index * ratio;
+      left = Math.floor(position);
+    }
+    previous = value;
   }
   return { samples: output, sampleRate: targetRate };
 }
 
+/** Reuse an already suitable waveform during synchronous read-only analysis. */
+export function voiceAnalysisInput(
+  samples,
+  sampleRate,
+  targetRate = ANALYSIS_RATE
+) {
+  if (
+    sampleRate <= targetRate * 1.02 &&
+    (samples instanceof Float32Array || samples instanceof Float64Array) &&
+    samples.buffer instanceof ArrayBuffer
+  ) {
+    return { samples, sampleRate };
+  }
+  return resample(samples, sampleRate, targetRate);
+}
+
 /** Linear-interpolated percentile of a list (`fraction` 0 to 1; 0 when empty). */
 export function percentile(values, fraction) {
-  if (values.length === 0) {
+  return sortedPercentile(Float64Array.from(values).sort(), fraction);
+}
+
+function sortedPercentile(sorted, fraction) {
+  if (sorted.length === 0) {
     return 0;
   }
-  const sorted = Float64Array.from(values).sort();
   const position = fraction * (sorted.length - 1);
   const left = Math.floor(position);
   const right = Math.min(sorted.length - 1, left + 1);
@@ -111,63 +134,99 @@ function frameLevel(signal, start, length) {
   return Math.sqrt(sum / length);
 }
 
+/** Scratch storage shared by sequential YIN frames at one sample rate. */
+export function createYinWorkspace(sampleRate) {
+  return new Float64Array(Math.ceil(sampleRate / MIN_F0) + 2);
+}
+
 /**
- * YIN pitch of one frame.
- * @returns {{f0: number, aperiodicity: number}}
+ * First dip below the YIN threshold, with its neighbours measured for
+ * interpolation. Without a dip, return the lowest measured lag.
  */
-export function yinPitch(signal, start, length, sampleRate) {
-  const minLag = Math.max(2, Math.floor(sampleRate / MAX_F0));
-  const maxLag = Math.ceil(sampleRate / MIN_F0);
-  const normalized = new Float64Array(maxLag + 2);
+function yinLag(signal, start, length, minLag, maxLag, normalized) {
   normalized[0] = 1;
   let running = 0;
+  let below = false;
+  // Pairs starting beyond the recording contribute zero, including when
+  // the reference window itself reaches the end of the recording.
+  const end = Math.min(start + length, signal.length);
+  const dense =
+    signal instanceof Float32Array || signal instanceof Float64Array;
   for (let lag = 1; lag <= maxLag + 1; lag++) {
     let sum = 0;
-    for (let index = start; index < start + length; index++) {
+    const paired = dense ? Math.min(end, signal.length - lag) : start;
+    let index = start;
+    for (; index < paired; index++) {
+      const delta = signal[index] - signal[index + lag];
+      sum += delta * delta;
+    }
+    for (; index < end; index++) {
       const delta = signal[index] - (signal[index + lag] ?? 0);
       sum += delta * delta;
     }
     running += sum;
     normalized[lag] = running > 0 ? (sum * lag) / running : 1;
-  }
-  let best = -1;
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    if (normalized[lag] < YIN_THRESHOLD) {
-      while (lag < maxLag && normalized[lag + 1] < normalized[lag]) {
-        lag++;
+    if (lag >= minLag) {
+      if (below && (lag > maxLag || !(normalized[lag] < normalized[lag - 1]))) {
+        return lag - 1;
       }
+      below ||= normalized[lag] < YIN_THRESHOLD;
+    }
+  }
+  let best = minLag;
+  for (let lag = minLag + 1; lag <= maxLag; lag++) {
+    if (normalized[lag] < normalized[best]) {
       best = lag;
-      break;
     }
   }
-  if (best < 0) {
-    best = minLag;
-    for (let lag = minLag; lag <= maxLag; lag++) {
-      if (normalized[lag] < normalized[best]) {
-        best = lag;
-      }
-    }
-  }
+  return best;
+}
+
+/**
+ * YIN pitch of one frame.
+ * @returns {{f0: number, aperiodicity: number}}
+ */
+export function yinPitch(
+  signal,
+  start,
+  length,
+  sampleRate,
+  normalized = createYinWorkspace(sampleRate),
+  pitch = { f0: 0, aperiodicity: 0 }
+) {
+  const minLag = Math.max(2, Math.floor(sampleRate / MAX_F0));
+  const maxLag = Math.ceil(sampleRate / MIN_F0);
+  const best = yinLag(signal, start, length, minLag, maxLag, normalized);
   const before = normalized[best - 1];
   const after = normalized[best + 1];
   const curvature = before - 2 * normalized[best] + after;
   const shift = curvature > 0 ? (0.5 * (before - after)) / curvature : 0;
-  return {
-    f0: sampleRate / (best + Math.max(-0.5, Math.min(0.5, shift))),
-    aperiodicity: Math.max(0, normalized[best]),
-  };
+  pitch.f0 = sampleRate / (best + Math.max(-0.5, Math.min(0.5, shift)));
+  pitch.aperiodicity = Math.max(0, normalized[best]);
+  return pitch;
 }
 
-/** Cubic (Catmull-Rom) interpolation of a signal at a fractional index. */
+/** Cubic (Catmull-Rom) interpolation of a dense signal at a fractional index. */
 function cubicAt(signal, position) {
   const index = Math.floor(position);
   const x = position - index;
-  const at = (offset) =>
-    signal[Math.min(signal.length - 1, Math.max(0, index + offset))] ?? 0;
-  const p0 = at(-1);
-  const p1 = at(0);
-  const p2 = at(1);
-  const p3 = at(2);
+  const last = signal.length - 1;
+  // Most of a pitch window is interior. Clamp the four neighbours only
+  // where the interpolator actually reaches an edge of the recording.
+  let a = index - 1;
+  let b = index;
+  let c = index + 1;
+  let d = index + 2;
+  if (!(a >= 0 && d <= last)) {
+    a = Math.min(last, Math.max(0, a));
+    b = Math.min(last, Math.max(0, b));
+    c = Math.min(last, Math.max(0, c));
+    d = Math.min(last, Math.max(0, d));
+  }
+  const p0 = signal[a];
+  const p1 = signal[b];
+  const p2 = signal[c];
+  const p3 = signal[d];
   return (
     p1 +
     0.5 *
@@ -186,21 +245,19 @@ function cubicAt(signal, position) {
  * itself period by period, as YIN assumes.
  * @param {ArrayLike<number>} signal
  * @param {number} start First sample of the stretch.
- * @param {number} length Number of samples.
+ * @param {Float64Array} output Workspace for the resampled stretch.
  * @param {number} sampleRate
  * @param {number} slope Pitch change (Hz per second).
  * @param {number} f0 Pitch (Hz) in the middle of the stretch.
- * @returns {Float64Array}
  */
-function straighten(signal, start, length, sampleRate, slope, f0) {
-  const output = new Float64Array(length);
+function straighten(signal, start, output, sampleRate, slope, f0) {
+  const { length } = output;
   const middle = start + length / 2;
   const warp = slope / (2 * f0);
   for (let n = 0; n < length; n++) {
     const t = (n - length / 2) / sampleRate;
     output[n] = cubicAt(signal, middle + (t - warp * t * t) * sampleRate);
   }
-  return output;
 }
 
 /**
@@ -208,26 +265,26 @@ function straighten(signal, start, length, sampleRate, slope, f0) {
  * before and after it; 0 when one of them is unvoiced. Limited to
  * MAX_SLOPE f0 per second.
  */
-function pitchSlope(frames, index, f0) {
-  const previous = frames[index - 1];
-  const next = frames[index + 1];
-  if (!previous?.voiced || !next?.voiced) {
+function pitchSlope(pitches, index, f0) {
+  const previous = pitches[index - 1];
+  const next = pitches[index + 1];
+  if (!previous || !next) {
     return 0;
   }
   const limit = MAX_SLOPE * f0;
-  return Math.max(-limit, Math.min(limit, (next.f0 - previous.f0) / (2 * HOP)));
+  return Math.max(-limit, Math.min(limit, (next - previous) / (2 * HOP)));
 }
 
 /**
  * YIN aperiodicity of a voiced frame after its pitch movement is taken out.
  * The stretch covers the frame and the longest lag YIN compares it with.
  */
-function straightAperiodicity(signal, frames, index, hop, length, rate) {
-  const { f0 } = frames[index];
-  const slope = pitchSlope(frames, index, f0);
-  const span = length + Math.ceil(rate / MIN_F0) + 2;
-  const straight = straighten(signal, index * hop, span, rate, slope, f0);
-  return fractionalAperiodicity(straight, length, rate / f0);
+function straightAperiodicity(signal, pitches, index, scratch) {
+  const { hop, length, rate, straight, differences } = scratch;
+  const f0 = pitches[index];
+  const slope = pitchSlope(pitches, index, f0);
+  straighten(signal, index * hop, straight, rate, slope, f0);
+  return fractionalAperiodicity(straight, length, rate / f0, differences);
 }
 
 /**
@@ -237,11 +294,25 @@ function straightAperiodicity(signal, frames, index, hop, length, rate) {
 function meanDifference(signal, length, lags) {
   let total = 0;
   for (let lag = 1; lag <= lags; lag++) {
-    for (let index = 0; index < length; index++) {
-      total += (signal[index] - signal[index + lag]) ** 2;
-    }
+    total = addLagDifference(signal, length, lag, total);
   }
   return total / lags;
+}
+
+function addLagDifference(signal, length, lag, total) {
+  for (let index = 0; index < length; index++) {
+    const difference = signal[index] - signal[index + lag];
+    total += difference * difference;
+  }
+  return total;
+}
+
+function fractionalDifference(signal, length, lag, mean) {
+  let sum = 0;
+  for (let index = 0; index < length; index++) {
+    sum += (signal[index] - cubicAt(signal, index + lag)) ** 2;
+  }
+  return sum / mean;
 }
 
 /**
@@ -253,36 +324,30 @@ function meanDifference(signal, length, lags) {
  * refined with a parabola; the signal is read at fractional positions by
  * cubic interpolation.
  */
-function fractionalAperiodicity(signal, length, period) {
+function fractionalAperiodicity(signal, length, period, values) {
   const mean = meanDifference(signal, length, Math.round(period));
   if (!(mean > 0)) {
     return 1;
   }
-  const difference = (lag) => {
-    let sum = 0;
-    for (let index = 0; index < length; index++) {
-      sum += (signal[index] - cubicAt(signal, index + lag)) ** 2;
-    }
-    return sum / mean;
-  };
-  const steps = Math.round(LAG_SPAN / LAG_STEP);
-  const values = [];
-  for (let step = -steps; step <= steps; step++) {
-    values.push(difference(period + step * LAG_STEP));
-  }
   let at = 0;
-  values.forEach((value, step) => {
+  for (let step = 0; step < values.length; step++) {
+    const lag = period + (step - LAG_STEPS) * LAG_STEP;
+    const value = fractionalDifference(signal, length, lag, mean);
+    values[step] = value;
     if (value < values[at]) {
       at = step;
     }
-  });
+  }
   let lowest = values[at];
   if (at > 0 && at < values.length - 1) {
     const curvature = values[at - 1] - 2 * values[at] + values[at + 1];
     if (curvature > 0) {
       const shift = (0.5 * (values[at - 1] - values[at + 1])) / curvature;
-      const lag = period + (at - steps + shift) * LAG_STEP;
-      lowest = Math.min(lowest, difference(lag));
+      const lag = period + (at - LAG_STEPS + shift) * LAG_STEP;
+      lowest = Math.min(
+        lowest,
+        fractionalDifference(signal, length, lag, mean)
+      );
     }
   }
   return lowest;
@@ -290,21 +355,23 @@ function fractionalAperiodicity(signal, length, period) {
 
 /** Fourth-order Butterworth high-pass (two biquads). */
 function highpass(signal, frequency, rate) {
-  const filters = [new Biquad(), new Biquad()];
-  filters[0].highpass(frequency, 0.54, rate);
-  filters[1].highpass(frequency, 1.31, rate);
-  return signal.map((value) => filters[1].process(filters[0].process(value)));
+  const first = new Biquad().highpass(frequency, 0.54, rate);
+  const second = new Biquad().highpass(frequency, 1.31, rate);
+  const output = new signal.constructor(signal.length);
+  for (let i = 0; i < signal.length; i++) {
+    output[i] = second.process(first.process(signal[i]));
+  }
+  return output;
 }
 
-function harmonicLevel(signal, start, length, frequency, sampleRate) {
+function harmonicLevel(windowed, frequency, sampleRate) {
   let best = 0;
   for (let step = -4; step <= 4; step++) {
     const omega = (2 * Math.PI * frequency * (1 + 0.025 * step)) / sampleRate;
     let re = 0;
     let im = 0;
-    for (let index = 0; index < length; index++) {
-      const window = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / length);
-      const value = signal[start + index] * window;
+    for (let index = 0; index < windowed.length; index++) {
+      const value = windowed[index];
       re += value * Math.cos(omega * index);
       im -= value * Math.sin(omega * index);
     }
@@ -330,7 +397,8 @@ export function formantSpacing(formants) {
 }
 
 function countSyllables(levels, voiced) {
-  const smooth = levels.map((_, index) => {
+  const decibels = new Float64Array(levels.length);
+  for (let index = 0; index < levels.length; index++) {
     let sum = 0;
     let count = 0;
     for (let offset = -1; offset <= 1; offset++) {
@@ -339,9 +407,8 @@ function countSyllables(levels, voiced) {
         count++;
       }
     }
-    return sum / count;
-  });
-  const decibels = smooth.map((value) => 20 * Math.log10(value + 1e-9));
+    decibels[index] = 20 * Math.log10(sum / count + 1e-9);
+  }
   let count = 0;
   let valley = Infinity;
   let last = -Infinity;
@@ -360,6 +427,12 @@ function countSyllables(levels, voiced) {
   return count;
 }
 
+export function sliceVoiceSamples(samples, limit) {
+  return samples instanceof Float32Array || samples instanceof Float64Array
+    ? samples.subarray(0, limit)
+    : Array.prototype.slice.call(samples, 0, limit);
+}
+
 /**
  * Measure the voice features of a recording.
  * @param {ArrayLike<number>} samples Mono samples.
@@ -374,13 +447,18 @@ function countSyllables(levels, voiced) {
  *   telephone speech). `formants` always has four entries; those that
  *   were not measured are 0.
  */
-export function prepareLegacyVoice(samples, sampleRate, options = {}) {
+export function prepareLegacyVoice(
+  samples,
+  sampleRate,
+  options = {},
+  ownsSamples = false
+) {
   const limit = Math.floor((options.maxDuration ?? 30) * sampleRate);
   const input =
-    samples.length > limit
-      ? Array.prototype.slice.call(samples, 0, limit)
-      : samples;
-  const { samples: signal, sampleRate: rate } = resample(
+    samples.length > limit ? sliceVoiceSamples(samples, limit) : samples;
+  // A deferred analysis can keep the fitter's private snapshot directly.
+  const prepare = ownsSamples ? voiceAnalysisInput : resample;
+  const { samples: signal, sampleRate: rate } = prepare(
     input,
     sampleRate,
     options.analysisRate ?? ANALYSIS_RATE
@@ -390,33 +468,44 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
     options.formantCount ?? Math.min(4, Math.floor((0.45 * rate) / 1000));
   const hop = Math.round(HOP * rate);
   const length = Math.round(WINDOW * rate);
-  const levels = [];
-  for (let start = 0; start + length <= signal.length; start += hop) {
-    levels.push(frameLevel(signal, start, length));
+  const count = Math.max(0, Math.floor((signal.length - length) / hop) + 1);
+  const levels = new Float64Array(count);
+  for (let i = 0; i < count; i++) {
+    levels[i] = frameLevel(signal, i * hop, length);
   }
   const loud = percentile(levels, 0.95);
-  const active = levels.map((level) => level > Math.max(1e-4, 0.1 * loud));
-  const frames = active.map((value) => (value ? null : { voiced: false }));
+  const threshold = Math.max(1e-4, 0.1 * loud);
+  const pending = new Uint8Array(count);
+  const pitches = new Float64Array(count);
+  let activeFrames = 0;
+  for (let i = 0; i < count; i++) {
+    if (levels[i] > threshold) {
+      pending[i] = 1;
+      activeFrames++;
+    }
+  }
+  const yin = createYinWorkspace(rate);
+  const pitch = { f0: 0, aperiodicity: 0 };
   let evaluated = 0;
-  function frameAt(index) {
-    if (frames[index] === null) {
-      const pitch = yinPitch(signal, index * hop, length, rate);
-      frames[index] = {
-        ...pitch,
-        voiced: pitch.aperiodicity < VOICED_APERIODICITY,
-      };
+  function isVoiced(index) {
+    if (pending[index]) {
+      yinPitch(signal, index * hop, length, rate, yin, pitch);
+      if (pitch.aperiodicity < VOICED_APERIODICITY) {
+        pitches[index] = pitch.f0;
+      }
+      pending[index] = 0;
       evaluated++;
     }
-    return frames[index];
+    return pitches[index] > 0;
   }
-  const activeSeconds = active.filter(Boolean).length * HOP;
+  const activeSeconds = activeFrames * HOP;
+  let syllables;
   const rateFeatures = {
     duration: samples.length / sampleRate,
     activeDuration: activeSeconds,
     get syllableRate() {
       return activeSeconds > 0
-        ? countSyllables(levels, (index) => frameAt(index).voiced) /
-            activeSeconds
+        ? (syllables ??= countSyllables(levels, isVoiced)) / activeSeconds
         : 0;
     },
   };
@@ -425,7 +514,7 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
       stage: 'legacy-voice-pitch',
       phase,
       evaluated,
-      activeFrames: active.filter(Boolean).length,
+      activeFrames,
     });
   if (options.trace) {
     void rateFeatures.syllableRate;
@@ -435,19 +524,20 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   let features = null;
   function pitchFeatures() {
     if (!features) {
-      for (let index = 0; index < frames.length; index++) {
-        if (frameAt(index).voiced) {
+      for (let index = 0; index < count; index++) {
+        if (isVoiced(index)) {
           voicedIndices.push(index);
         }
       }
-      const f0s = voicedIndices.map((index) => frames[index].f0);
-      const f0Low = percentile(f0s, 0.05);
-      const f0High = percentile(f0s, 0.95);
+      const f0s = Float64Array.from(voicedIndices, (index) => pitches[index]);
+      f0s.sort();
+      const f0Low = sortedPercentile(f0s, 0.05);
+      const f0High = sortedPercentile(f0s, 0.95);
       features = {
         duration: rateFeatures.duration,
         activeDuration: activeSeconds,
         voicedDuration: voicedIndices.length * HOP,
-        f0: median(f0s),
+        f0: sortedPercentile(f0s, 0.5),
         f0Low,
         f0High,
         f0Range: f0Low > 0 ? 12 * Math.log2(f0High / f0Low) : 0,
@@ -473,7 +563,7 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
       if (!completed) {
         Object.assign(
           features,
-          legacyDiagnostics(signal, rate, frames, voicedIndices, {
+          legacyDiagnostics(signal, rate, pitches, voicedIndices, {
             ...options,
             order,
             formantCount,
@@ -488,50 +578,69 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   };
 }
 
-function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
+function legacyDiagnostics(signal, rate, pitches, voicedIndices, options) {
   const { order, formantCount, hop, length } = options;
   const diagnosticFrames = voicedIndices.length;
   const stride = Math.max(1, diagnosticFrames / FORMANT_FRAMES);
   const upper = highpass(signal, HNR_HIGHPASS, rate);
   const tracks = [[], [], [], []];
   const spacings = [];
-  const tilts = [];
-  const noise = [];
-  for (let pick = 0; pick < diagnosticFrames; pick += stride) {
+  // Floating-point increments of the stride can admit one final frame.
+  const capacity = Math.min(diagnosticFrames, FORMANT_FRAMES + 1);
+  const tilts = new Float64Array(capacity);
+  const noise = new Float64Array(capacity);
+  const hann = new Float64Array(length);
+  for (let index = 0; index < length; index++) {
+    hann[index] = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / length);
+  }
+  const windowed = new Float64Array(length);
+  const hnrScratch = {
+    hop,
+    length,
+    rate,
+    straight: new Float64Array(length + Math.ceil(rate / MIN_F0) + 2),
+    differences: new Float64Array(2 * LAG_STEPS + 1),
+  };
+  const estimate = options.diagnosticsOnly
+    ? null
+    : createFormantEstimator(signal, rate, {
+        duration: 0.03,
+        count: formantCount,
+        analysisRate: rate,
+        order,
+      });
+  let measured = 0;
+  for (let pick = 0; pick < diagnosticFrames; pick += stride, measured++) {
     const index = voicedIndices[Math.floor(pick)];
     const start = index * hop;
-    const formants = options.diagnosticsOnly
-      ? []
-      : estimateFormants(signal, rate, {
-          start: start / rate,
-          duration: 0.03,
-          count: formantCount,
-          analysisRate: rate,
-          order,
-        });
-    formants.slice(0, 4).forEach((value, order) => tracks[order].push(value));
-    if (formants.length >= 3) {
-      spacings.push(formantSpacing(formants));
+    if (estimate) {
+      const formants = estimate(start / rate);
+      for (let formant = 0; formant < Math.min(formants.length, 4); formant++) {
+        tracks[formant].push(formants[formant]);
+      }
+      if (formants.length >= 3) {
+        spacings.push(formantSpacing(formants));
+      }
     }
-    const h1 = harmonicLevel(signal, start, length, frames[index].f0, rate);
-    const h2 = harmonicLevel(signal, start, length, 2 * frames[index].f0, rate);
-    tilts.push(20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12)));
+    for (let n = 0; n < length; n++) {
+      windowed[n] = signal[start + n] * hann[n];
+    }
+    const h1 = harmonicLevel(windowed, pitches[index], rate);
+    const h2 = harmonicLevel(windowed, 2 * pitches[index], rate);
+    tilts[measured] = 20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12));
     const aperiodicity = Math.min(
       0.999,
-      Math.max(
-        1e-3,
-        straightAperiodicity(upper, frames, index, hop, length, rate)
-      )
+      Math.max(1e-3, straightAperiodicity(upper, pitches, index, hnrScratch))
     );
-    noise.push(10 * Math.log10((1 - aperiodicity) / aperiodicity));
+    noise[measured] = 10 * Math.log10((1 - aperiodicity) / aperiodicity);
   }
   const spacing = median(spacings);
   return {
     formants: tracks.map((track) => median(track)),
     formantSpacing: spacing,
     vocalTractLength: spacing > 0 ? SPEED_OF_SOUND / (2 * spacing) : 0,
-    h1h2: median(tilts),
-    hnr: percentile(noise, HNR_PERCENTILE),
+    h1h2: sortedPercentile(tilts.subarray(0, measured).sort(), 0.5),
+    hnr: sortedPercentile(noise.subarray(0, measured).sort(), HNR_PERCENTILE),
   };
 }
 
@@ -546,7 +655,10 @@ export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
 /** Shared stage-A statistics; legacy diagnostics remain available internally. */
 export function analyzeVoice(samples, sampleRate, options = {}) {
   const features = stateFeatures(
-    accumulate(emptyState(), samples, sampleRate, options)
+    accumulate(emptyState(), samples, sampleRate, {
+      ...options,
+      retainNucleiCarry: false,
+    })
   );
   delete features.rd;
   delete features.cpp;

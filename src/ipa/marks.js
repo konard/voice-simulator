@@ -228,6 +228,11 @@ function emphasize(text) {
  * @returns {string[]} the pieces and the mark chunks, in order
  */
 export function writeMarks(pieces, modes = []) {
+  const parts = [];
+  if (Array.isArray(modes) && modes.length === 0) {
+    pieces.forEach((piece) => parts.push(piece.text));
+    return parts;
+  }
   const before = new Map();
   const after = new Map();
   const strong = new Set();
@@ -286,7 +291,6 @@ export function writeMarks(pieces, modes = []) {
     }
     wrap(at, at, span.mode);
   }
-  const parts = [];
   located.forEach((piece, index) => {
     parts.push(...(before.get(index) ?? []));
     parts.push(strong.has(index) ? emphasize(piece.text) : piece.text);

@@ -11,8 +11,8 @@ import { Biquad } from './filters.js';
  * @param {number} order
  * @returns {Float64Array} a[0..order] with a[0] = 1.
  */
-export function lpcCoefficients(frame, order) {
-  const r = new Float64Array(order + 1);
+export function lpcCoefficients(frame, order, scratch) {
+  const r = scratch?.correlation ?? new Float64Array(order + 1);
   for (let lag = 0; lag <= order; lag++) {
     let sum = 0;
     for (let index = lag; index < frame.length; index++) {
@@ -21,7 +21,7 @@ export function lpcCoefficients(frame, order) {
     r[lag] = sum;
   }
   r[0] *= 1 + 1e-9;
-  const a = new Float64Array(order + 1);
+  const a = scratch?.predictor ?? new Float64Array(order + 1);
   a[0] = 1;
   let error = r[0] || 1e-12;
   for (let i = 1; i <= order; i++) {
@@ -30,14 +30,27 @@ export function lpcCoefficients(frame, order) {
       acc += a[j] * r[i - j];
     }
     const k = -acc / error;
-    const previous = Float64Array.from(a);
-    for (let j = 1; j < i; j++) {
-      a[j] = previous[j] + k * previous[i - j];
+    for (let j = 1; j <= i / 2; j++) {
+      const left = a[j];
+      const right = a[i - j];
+      a[j] = left + k * right;
+      a[i - j] = right + k * left;
     }
     a[i] = k;
     error *= 1 - k * k;
   }
   return a;
+}
+
+function lpcMagnitude(a, frequency, sampleRate) {
+  const omega = (2 * Math.PI * frequency) / sampleRate;
+  let re = 0;
+  let im = 0;
+  for (let k = 0; k < a.length; k++) {
+    re += a[k] * Math.cos(omega * k);
+    im -= a[k] * Math.sin(omega * k);
+  }
+  return 1 / Math.hypot(re, im);
 }
 
 /** |1 / A(e^jw)| on a frequency grid. */
@@ -47,15 +60,8 @@ export function lpcEnvelope(a, sampleRate, step = 10) {
   const magnitudes = new Float64Array(count);
   for (let bin = 0; bin < count; bin++) {
     const frequency = (bin + 1) * step;
-    const omega = (2 * Math.PI * frequency) / sampleRate;
-    let re = 0;
-    let im = 0;
-    for (let k = 0; k < a.length; k++) {
-      re += a[k] * Math.cos(omega * k);
-      im -= a[k] * Math.sin(omega * k);
-    }
     frequencies[bin] = frequency;
-    magnitudes[bin] = 1 / Math.hypot(re, im);
+    magnitudes[bin] = lpcMagnitude(a, frequency, sampleRate);
   }
   return { frequencies, magnitudes };
 }
@@ -69,12 +75,34 @@ export function lpcEnvelope(a, sampleRate, step = 10) {
  * @returns {{samples: Float64Array, sampleRate: number}}
  */
 export function decimate(samples, sampleRate, targetRate) {
+  return decimateFrame(samples, sampleRate, targetRate);
+}
+
+function decimateFrame(samples, sampleRate, targetRate, workspace) {
   const factor = Math.max(1, Math.round(sampleRate / targetRate));
-  const filters = [new Biquad(), new Biquad()];
-  const cutoff = (sampleRate / factor) * 0.45;
-  filters[0].lowpass(cutoff, 0.54, sampleRate);
-  filters[1].lowpass(cutoff, 1.31, sampleRate);
-  const output = new Float64Array(Math.floor(samples.length / factor));
+  const filters = workspace?.filters ?? [new Biquad(), new Biquad()];
+  if (workspace?.filters) {
+    filters[0].reset();
+    filters[1].reset();
+  } else {
+    const cutoff = (sampleRate / factor) * 0.45;
+    filters[0].lowpass(cutoff, 0.54, sampleRate);
+    filters[1].lowpass(cutoff, 1.31, sampleRate);
+    if (workspace) {
+      workspace.filters = filters;
+    }
+  }
+  const length = Math.floor(samples.length / factor);
+  const frame = workspace?.frame;
+  let output;
+  if (frame && frame.length >= length) {
+    output = frame.length === length ? frame : frame.subarray(0, length);
+  } else {
+    output = new Float64Array(length);
+    if (workspace) {
+      workspace.frame = output;
+    }
+  }
   for (let index = 0; index < output.length * factor; index++) {
     const value = filters[1].process(filters[0].process(samples[index]));
     if (index % factor === 0) {
@@ -84,18 +112,33 @@ export function decimate(samples, sampleRate, targetRate) {
   return { samples: output, sampleRate: sampleRate / factor };
 }
 
-function peaks({ frequencies, magnitudes }, minimum = 150) {
-  const result = [];
-  for (let index = 1; index < magnitudes.length - 1; index++) {
-    if (
-      frequencies[index] > minimum &&
-      magnitudes[index] > magnitudes[index - 1] &&
-      magnitudes[index] >= magnitudes[index + 1]
-    ) {
-      result.push(frequencies[index]);
-    }
+/** Find LPC peaks as the grid is evaluated. Only the last three bins matter. */
+function formantPeaks(a, rate, count) {
+  const step = 5;
+  const bins = Math.floor(rate / 2 / step);
+  if (bins < 0 || bins === Infinity) {
+    throw new RangeError('Invalid LPC frequency grid size');
   }
-  return result;
+  const limit = Number.isInteger(count) && count >= 0 ? count : Infinity;
+  const result = [];
+  if (!(bins >= 3) || limit === 0) {
+    return result;
+  }
+  let previous = lpcMagnitude(a, step, rate);
+  let current = lpcMagnitude(a, 2 * step, rate);
+  for (let bin = 3; bin <= bins; bin++) {
+    const next = lpcMagnitude(a, bin * step, rate);
+    const frequency = (bin - 1) * step;
+    if (frequency > 150 && current > previous && current >= next) {
+      result.push(frequency);
+      if (result.length === limit) {
+        return result;
+      }
+    }
+    previous = current;
+    current = next;
+  }
+  return limit === Infinity ? result.slice(0, count) : result;
 }
 
 /**
@@ -105,10 +148,37 @@ function peaks({ frequencies, magnitudes }, minimum = 150) {
  * @param {{start?: number, duration?: number, order?: number, count?: number, analysisRate?: number}} [options]
  */
 export function estimateFormants(samples, sampleRate, options = {}) {
+  return estimateFormantFrame(samples, sampleRate, options);
+}
+
+/** Reuse the decimator, frame and LPC coefficients across adjacent windows. */
+export function createFormantEstimator(samples, sampleRate, options) {
+  const settings = { ...options };
+  const length = (settings.order ?? 12) + 1;
+  const workspace = {
+    correlation: new Float64Array(length),
+    predictor: new Float64Array(length),
+  };
+  return (start) => {
+    settings.start = start;
+    return estimateFormantFrame(samples, sampleRate, settings, workspace);
+  };
+}
+
+function estimateFormantFrame(samples, sampleRate, options, workspace) {
   const start = Math.floor((options.start ?? 0) * sampleRate);
   const length = Math.floor((options.duration ?? 0.05) * sampleRate);
-  const slice = Array.prototype.slice.call(samples, start, start + length);
-  const decimated = decimate(slice, sampleRate, options.analysisRate ?? 11025);
+  const slice =
+    (samples instanceof Float32Array || samples instanceof Float64Array) &&
+    samples.buffer instanceof ArrayBuffer
+      ? samples.subarray(start, start + length)
+      : Array.prototype.slice.call(samples, start, start + length);
+  const decimated = decimateFrame(
+    slice,
+    sampleRate,
+    options.analysisRate ?? 11025,
+    workspace
+  );
   const frame = decimated.samples;
   for (let index = frame.length - 1; index > 0; index--) {
     frame[index] -= 0.94 * frame[index - 1];
@@ -118,11 +188,8 @@ export function estimateFormants(samples, sampleRate, options = {}) {
       0.54 - 0.46 * Math.cos((2 * Math.PI * index) / (frame.length - 1));
   }
   const order = options.order ?? 12;
-  const a = lpcCoefficients(frame, order);
-  return peaks(lpcEnvelope(a, decimated.sampleRate, 5)).slice(
-    0,
-    options.count ?? 4
-  );
+  const a = lpcCoefficients(frame, order, workspace);
+  return formantPeaks(a, decimated.sampleRate, options.count ?? 4);
 }
 
 /**

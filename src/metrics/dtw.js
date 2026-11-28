@@ -61,7 +61,8 @@ function traceBack(steps, n, m) {
   let j = m - 1;
   const path = [[i, j]];
   while (i > 0 || j > 0) {
-    const step = steps[i * m + j];
+    const cell = i * m + j;
+    const step = (steps[cell >>> 2] >>> ((cell & 3) * 2)) & 3;
     if (step !== LEFT) {
       i--;
     }
@@ -106,7 +107,8 @@ export function dtw(a, b, options = {}) {
   const distance = options.distance ?? euclideanDistance;
   const band = options.band ?? 1;
   const weight = options.diagonalWeight ?? 1;
-  const steps = new Uint8Array(n * m);
+  // There are four possible predecessors, including an unreachable cell.
+  const steps = new Uint8Array(Math.ceil((n * m) / 4));
   let previous = new Float64Array(m).fill(Infinity);
   let current = new Float64Array(m);
   for (let i = 0; i < n; i++) {
@@ -124,10 +126,13 @@ export function dtw(a, b, options = {}) {
         const factor = step === DIAGONAL ? weight : 1;
         current[j] =
           factor * local + predecessorCost(previous, current, j, step);
-        steps[i * m + j] = step;
+        const cell = i * m + j;
+        steps[cell >>> 2] |= step << ((cell & 3) * 2);
       }
     }
-    [previous, current] = [current, previous];
+    const prior = previous;
+    previous = current;
+    current = prior;
   }
   const cost = previous[m - 1];
   if (!Number.isFinite(cost)) {

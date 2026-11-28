@@ -137,6 +137,8 @@ describe('fitVoice', () => {
       });
       expect(refined.renders).toBe(1);
       expect(refined.state.voicedFrames).toBe(split.state.voicedFrames);
+      split.state.histograms.f0.fill(0);
+      expect(resumed.state.histograms.f0).toEqual(refined.state.histograms.f0);
     }
   });
   it('is deterministic', () => {

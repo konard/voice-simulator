@@ -13,15 +13,20 @@ import {
   hmmPitchStatics,
 } from '../src/recognition/hmm-features.js';
 import {
-  decodeWords,
   HMM_DECODE_DEFAULTS,
-  languageThresholds,
+  alignWords,
+  createThresholds,
+  decodeWords,
 } from '../src/recognition/hmm-decode.js';
+import { Frontier } from '../src/recognition/hmm-frontier.js';
 import { getHmmModel, stateIndex } from '../src/recognition/hmm-model.js';
+import { ipaToText } from '../src/recognition/ipa-to-text.js';
 import {
+  HMM_LIVE_WORDS,
   buildNetwork,
   firstToneClass,
   getNetwork,
+  packHmmNetwork,
   toneVariants,
 } from '../src/recognition/hmm-network.js';
 import { recognitionSettings } from '../src/recognition/recognizer.js';
@@ -31,6 +36,71 @@ import {
 } from '../src/recognition/hmm-stage.js';
 
 const RATE = 8000;
+
+it('preserves queued scores when the HMM frontier needs wide indices', () => {
+  const frontier = new Frontier(65537);
+  assert.equal(frontier.index.BYTES_PER_ELEMENT, 2);
+  for (let i = 0; i < 65536; i++) {
+    frontier.enter(i, -i, i, i + 1);
+  }
+  frontier.enter(0, 2, 4, 6);
+  frontier.enter(65535, -1, 8, 10);
+  assert.equal(frontier.length, 65536);
+  assert.equal(frontier.index.BYTES_PER_ELEMENT, 4);
+  assert.equal(frontier.index[0], 1);
+  assert.equal(frontier.index[65535], 65536);
+  assert.equal(frontier.columns.scores[0], 2);
+  assert.equal(frontier.columns.histories[65535], 8);
+  assert.equal(frontier.columns.starts[65535], 10);
+  frontier.clear();
+  assert.equal(frontier.index[65535], 0);
+  frontier.enter(65535, 0, 0, 0);
+  assert.equal(frontier.index[65535], 1);
+});
+
+it('keeps batch frames private across a nested recognition callback', () => {
+  const options = { level: 'low', languages: ['en'], engine: 'js' };
+  const short = synthesize('Hello world.', {
+    lang: 'en',
+    tier: 'telephone',
+    engine: 'js',
+    seed: 1,
+  });
+  const longer = synthesize('The train leaves at seven.', {
+    lang: 'en',
+    tier: 'wideband',
+    engine: 'js',
+    seed: 1,
+  });
+  const expected = recognize(short.samples, short.sampleRate, options);
+  const otherOptions = { ...options, level: 'medium' };
+  const other = recognize(longer.samples, longer.sampleRate, otherOptions);
+  let nested;
+  const heard = recognize(short.samples, short.sampleRate, {
+    ...options,
+    profile(stage) {
+      if (stage === 'Audio to IPA') {
+        nested = recognize(longer.samples, longer.sampleRate, otherOptions);
+      }
+    },
+  });
+  assert.deepEqual(heard, expected);
+  assert.deepEqual(nested, other);
+});
+
+it('packs the same live vocabulary and transitions as the source builder', () => {
+  const source = buildNetwork(getHmmModel(), ['en'], {
+    maxWords: HMM_LIVE_WORDS,
+  });
+  const packed = packHmmNetwork('en', HMM_LIVE_WORDS);
+  assert.equal(packed.words.flags.length, source.words.length);
+  assert.deepEqual(packed.tree.root, source.trees.get('en').root);
+  assert.deepEqual(packed.emit, source.emit.subarray(0, source.stateCount));
+  assert.deepEqual(packed.wordId, source.wordId.subarray(0, source.wordLinks));
+  for (const [name, values] of Object.entries(packed.nodes)) {
+    assert.deepEqual(values, source.nodes[name].subarray(0, source.nodeCount));
+  }
+});
 
 it('accepts the word and phone decoders only', () => {
   assert.throws(
@@ -48,6 +118,53 @@ it('passes oov to the word decoder, on unless false', () => {
 it('puts frame boundaries halfway between frame centres', () => {
   const halfway = (hmmFrameTime(4) + hmmFrameTime(5)) / 2;
   assert.ok(Math.abs(hmmBoundaryTime(5) - halfway) < 1e-12);
+});
+
+it('aligns phones across an optional release and leading and trailing silence', () => {
+  const units = ['sil', 'p', 'p_r', 'a'];
+  const ciIndex = new Map();
+  for (const [i, unit] of units.entries()) {
+    for (let state = 0; state < 3; state++) {
+      ciIndex.set(`${unit}#${state}`, 3 * i + state);
+    }
+  }
+  const model = {
+    ciIndex,
+    contextIndex: new Map(),
+    dims: 1,
+    states: 12,
+    first: Uint32Array.from({ length: 13 }, (_, i) => i),
+    mu: Float32Array.from({ length: 12 }, (_, i) => i),
+    inv: new Float32Array(12).fill(100),
+    norm: new Float64Array(12),
+    stay: new Float64Array(12),
+    go: new Float64Array(12),
+  };
+  const words = [
+    { units: ['p', 'a'], tokens: [{ symbol: 'p' }, { symbol: 'a' }] },
+  ];
+  const features = Float32Array.of(3, 4, 5, 9, 10, 11);
+  const network = { model };
+  const shorter = features.subarray(0, 3);
+  const expectedNested = alignWords(network, shorter, shorter.length, words);
+  let nested;
+  const aligned = alignWords(network, features, features.length, words, {
+    onScore() {
+      nested = alignWords(network, shorter, shorter.length, words);
+    },
+  });
+  assert.deepEqual(nested, expectedNested);
+  assert.deepEqual(
+    alignWords(network, shorter, shorter.length, words),
+    expectedNested
+  );
+  assert.deepEqual(
+    aligned.map(({ token, from, to }) => [token.symbol, from, to]),
+    [
+      ['p', 0, 3],
+      ['a', 3, 6],
+    ]
+  );
 });
 
 it('uses only the relevant neighbor for each HMM state', () => {
@@ -100,14 +217,71 @@ it('decodes no words from silence', () => {
   assert.equal(decoded.ipa, '');
 });
 
+it('keeps HMM phones and tracks when word and syllable formatting are skipped', () => {
+  const { samples } = synthesize('It is time.', {
+    tier: 'telephone',
+    lang: 'en',
+    engine: 'js',
+  });
+  const options = { languages: ['en'] };
+  const full = hmmAudioToIpa(samples, RATE, options);
+  assert.ok(full.words.length && full.syllables.length);
+  const phones = hmmAudioToIpa(samples, RATE, {
+    ...options,
+    includeWords: false,
+    includeSyllables: false,
+  });
+  assert.deepEqual(phones, { ...full, words: [], syllables: [] });
+});
+
+it('uses the HMM language directly with the built-in text decoder', () => {
+  const { samples } = synthesize('It is time.', {
+    tier: 'telephone',
+    lang: 'en',
+    engine: 'js',
+  });
+  const options = { modes: false, level: 'low', segments: true };
+  const reads = [];
+  const expected = recognize(samples, RATE, {
+    ...options,
+    stages: {
+      ipaToText(input, settings) {
+        reads.push(settings.spans);
+        return ipaToText(input, settings);
+      },
+    },
+  });
+  assert.ok(reads[0]?.length);
+  const actual = recognize(samples, RATE, options);
+  assert.deepEqual(actual, expected);
+});
+
+it('keeps decoder scratch separate across nested and repeated searches', () => {
+  const model = getHmmModel();
+  const network = getNetwork(model, ['en'], { maxWords: 200 });
+  const audio = synthesize('It is time.', { tier: 'telephone', lang: 'en' });
+  const { feats, frames } = hmmFeatures(audio.samples, RATE, model.lda);
+  const run = (settings) => decodeWords(network, feats, frames, settings);
+  const expected = run();
+  let nested;
+  const actual = run({
+    onWordEnd() {
+      nested ??= run();
+    },
+  });
+  assert.deepEqual(nested, expected);
+  assert.deepEqual(actual, expected);
+  assert.deepEqual(run(), expected);
+});
+
 it('reuses the decoding graph when only one of its languages is requested', () => {
   const model = getHmmModel();
   const options = { maxWords: 40 };
   const multilingual = getNetwork(model, ['ru', 'en'], options);
   const english = getNetwork(model, ['en'], options);
-  assert.deepEqual(english.languages, ['en']);
+  assert.deepEqual([...english.trees.keys()], ['en']);
   assert.equal(english.trees.get('en'), multilingual.trees.get('en'));
-  assert.equal(english.language, multilingual.language);
+  assert.equal(english.nodes.language, multilingual.nodes.language);
   const spoken = synthesize('one two', { lang: 'en', tier: 'telephone' });
   const { feats, frames } = hmmFeatures(spoken.samples, RATE, model.lda);
   const decoded = decodeWords(english, feats, frames);
@@ -125,8 +299,15 @@ it('keeps separate graphs for alternating single-language recognition', () => {
   const russian = getNetwork(model, ['ru'], options);
 
   assert.deepEqual([...russian.trees.keys()], ['ru']);
-  assert.equal(getNetwork(model, ['en'], options).language, english.language);
-  assert.equal(getNetwork(model, ['ru'], options).language, russian.language);
+  assert.notEqual(english.nodes.first, russian.nodes.first);
+  assert.equal(
+    getNetwork(model, ['en'], options).nodes.first,
+    english.nodes.first
+  );
+  assert.equal(
+    getNetwork(model, ['ru'], options).nodes.first,
+    russian.nodes.first
+  );
 });
 
 it('adds the words of addLexicon() to the decoding network', () => {
@@ -141,7 +322,10 @@ it('adds the words of addLexicon() to the decoding network', () => {
     const entry = getNetwork(model, ['en'], { maxWords: 200 }).words.find(
       (w) => w.word === 'zorbex'
     );
-    assert.deepEqual(entry.units, ['z', 'ɔ', 'ɹ', 'b', 'ɛ', 'k', 's']);
+    assert.deepEqual(
+      entry.tokens.map((token) => token.symbol),
+      ['z', 'ɔ', 'ɹ', 'b', 'ɛ', 'k', 's']
+    );
     assert.ok(entry.count > 1);
   } finally {
     clearLexicons();
@@ -191,6 +375,22 @@ it('stresses the longest full vowel of a word outside the vocabulary', () => {
   stressOutOfVocabulary([{ oov: true, lang: 'hi' }], hindi);
   assert.equal(one[0].token.stress, undefined);
   assert.ok(hindi.every((a) => a.token.stress === undefined));
+
+  const several = [
+    vowel('ə', 0, 20),
+    { ...vowel('ɐ', 5, 10), word: 1 },
+    vowel('ɚ', 20, 40),
+    { ...vowel('ʊ', 10, 20), word: 1 },
+    { ...vowel('æ', 40, 50), word: 2 },
+  ];
+  stressOutOfVocabulary(
+    [{ oov: true, lang: 'en' }, { oov: true, lang: 'ru' }, { lang: 'en' }],
+    several
+  );
+  assert.deepEqual(
+    several.map((a) => a.token.stress ?? 0),
+    [1, 0, 0, 1, 0]
+  );
 });
 
 it('lets a rising sandhi variant go on only before the tone that causes it', () => {
@@ -218,12 +418,13 @@ it('lets a rising sandhi variant go on only before the tone that causes it', () 
   // The tree after a variant holds the words of that first tone only.
   for (const [before, roots] of tree.after) {
     const ids = [];
+    const { nodes, wordId, nextWord } = zh;
     const walk = (node) => {
-      for (let i = zh.firstWord[node]; i < zh.firstWord[node + 1]; i++) {
-        ids.push(zh.endings[i]);
+      for (let link = nodes.terminal[node]; link; link = nextWord[link]) {
+        ids.push(wordId[link]);
       }
-      for (let i = zh.firstChild[node]; i < zh.firstChild[node + 1]; i++) {
-        walk(zh.children[i]);
+      for (let child = nodes.child[node]; child; child = nodes.sibling[child]) {
+        walk(child);
       }
     };
     roots.forEach(walk);
@@ -237,42 +438,83 @@ it('lets a rising sandhi variant go on only before the tone that causes it', () 
 it('prunes each language against its own best token (issue 75)', () => {
   // English trails Mandarin by 200 at this frame, more than the beam of
   // 120: one beam over all languages would drop every English token.
-  const frame = (en, maxActive) => {
-    const thresholds = new Float64Array(2);
-    languageThresholds(
-      [0, 0, 1, 0, 0],
-      {
-        work: [0, 1, 2, 3, 4],
-        nodeScores: [en, en - 50, -300, en - 50, en - 140],
-        languageBest: [en, -300],
-        buckets: [[], []],
-        thresholds,
-      },
-      -300,
-      { ...HMM_DECODE_DEFAULTS, maxActive }
+  const nodes = Uint8Array.of(0, 0, 1);
+  const frame = (en) => [en, en - 140, -300];
+  const settings = { ...HMM_DECODE_DEFAULTS, beam: 120, languageBeam: 400 };
+  const prune = (en, options = settings) =>
+    createThresholds(nodes, 2, options)([0, 1, 2], frame(en), 3, -300);
+  assert.deepEqual(prune(-500), Float64Array.of(-620, -420));
+  // A language more than languageBeam behind the best goes.
+  assert.equal(prune(-800)[0], -700);
+  // maxActive keeps the best nodes of each language, not of all.
+  assert.deepEqual(
+    prune(-500, { ...settings, maxActive: 1 }),
+    Float64Array.of(-500, -420)
+  );
+});
+
+it('selects the histogram threshold with repeated scores and reused rows', () => {
+  const count = 1200;
+  const nodes = Uint8Array.from({ length: count }, (_, i) => i % 2);
+  const work = Array.from({ length: count }, (_, i) => i);
+  const maxActive = 83;
+  const thresholds = createThresholds(nodes, 2, {
+    beam: Infinity,
+    languageBeam: Infinity,
+    maxActive,
+  });
+  for (const length of [count, 250, 650]) {
+    const scores = Float64Array.from(
+      { length },
+      (_, i) => ((i * 103) % 219) - 110
     );
-    return Array.from(thresholds);
-  };
-  assert.deepEqual(frame(-500, 6000), [-620, -420]);
-  assert.deepEqual(frame(-800, 6000), [-700, -420]);
-  assert.deepEqual(frame(-500, 1), [-500, -420]);
-  assert.deepEqual(frame(-500, 2), [-550, -420]);
+    const expected = Float64Array.from([0, 1], (lang) =>
+      scores
+        .filter((_, i) => nodes[i] === lang)
+        .sort()
+        .at(-maxActive)
+    );
+    assert.deepEqual(thresholds(work, scores, length, 108), expected);
+  }
 });
 
 it('keeps ties at the histogram pruning threshold', () => {
   const scores = [-60, -7, -5, -3, -5, -1, -2, -80];
-  const thresholds = new Float64Array(1);
-  languageThresholds(
-    new Uint8Array(scores.length),
-    {
-      work: scores.map((_, index) => index),
-      nodeScores: scores,
-      languageBest: [-1],
-      buckets: [[]],
-      thresholds,
-    },
-    -1,
-    { ...HMM_DECODE_DEFAULTS, beam: 10, maxActive: 4 }
+  const nodes = new Uint8Array(scores.length);
+  const thresholds = createThresholds(nodes, 1, {
+    ...HMM_DECODE_DEFAULTS,
+    beam: 10,
+    maxActive: 4,
+  });
+  assert.equal(
+    thresholds(
+      scores.map((_, i) => i),
+      scores,
+      scores.length,
+      -1
+    )[0],
+    -5
   );
-  assert.equal(thresholds[0], -5);
+});
+
+it('leaves scores outside the beam out of the active-node histogram', () => {
+  const scores = [-1, -2, -10, -12, -20, -25];
+  const nodes = new Uint8Array(scores.length);
+  const row = new Float64Array(2);
+  const workspace = {
+    rows: [row],
+    sizes: new Uint32Array(1),
+    totals: new Uint32Array(1),
+    peaks: new Float64Array(1),
+    thresholds: new Float64Array(1),
+  };
+  const thresholds = createThresholds(
+    nodes,
+    1,
+    { ...HMM_DECODE_DEFAULTS, beam: 5, maxActive: 1 },
+    workspace
+  );
+  const work = scores.map((_, i) => i);
+  assert.equal(thresholds(work, scores, scores.length, -1)[0], -1);
+  assert.ok(workspace.rows[0] === row);
 });

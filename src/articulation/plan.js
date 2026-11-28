@@ -2,19 +2,12 @@
  * Utterance planning: IPA tokens -> timed segments -> smooth articulator
  * trajectories sampled at a fixed control rate.
  *
- * Every articulation channel is a list of targets `{value, start, end,
- * strength}` (`channelTargets()`), which src/articulation/dynamics.js turns
- * into a trajectory: a critically damped second-order system per
- * articulator (`ARTICULATORS`: one time constant each; lips and tongue tip
- * are fast, tongue body and velum slower) that starts moving `lead` seconds
- * before the sound it belongs to. Sounds without a target of their own for
- * a channel (vowels for the lips, consonants for the tongue body) let it
- * glide in a straight line between their neighbours; consonants hold the
- * tongue body against that line by their coarticulation resistance
- * (`COARTICULATION_RESISTANCE` in phones.js). Pitch, loudness, the vocal
- * effort (`effort` in dB and `tension`, src/articulation/effort.js), the
- * whisper (src/articulation/whisper.js) and the
- * fold source keep the zero-phase smoothing of `smoothChannel()`.
+ * `channelTargets()` returns time windows for each articulator, with a
+ * value and strength per window. dynamics.js converts these to a critically
+ * damped trajectory with one time constant per articulator and a lead before
+ * each sound. An articulator glides between its neighbours when a sound has
+ * no target for it, and coarticulation resistance can limit that motion.
+ * Other channels use the zero-phase smoothing of `smoothChannel()`.
  */
 
 import { getPhoneme } from '../ipa/inventory.js';
@@ -31,7 +24,11 @@ import {
   vowelChannels,
   vowelTarget,
 } from './phones.js';
-import { DYNAMICS_ORDER, approachTargets } from './dynamics.js';
+import {
+  DYNAMICS_ORDER,
+  approachTargets,
+  createDynamicsWorkspace,
+} from './dynamics.js';
 import {
   applyEffortDurations,
   applyModeGains,
@@ -754,22 +751,24 @@ function segmentTarget(segments, index, name, levels, head) {
  *   Values of the levels of `COARTICULATION_RESISTANCE` that replace the
  *   defaults; the head whose `jawRange` scales the `jaw` targets.
  */
-export function channelTargets(segments, name, options = {}) {
+export function channelTargets(segments, name, options = {}, output = []) {
   const levels = options.resistance
     ? { ...COARTICULATION_RESISTANCE.levels, ...options.resistance }
     : COARTICULATION_RESISTANCE.levels;
   const head =
     name === 'jaw' ? normalizeHeadConfig(options.head ?? DEFAULT_HEAD) : null;
-  return segments.map((segment, index) => {
+  output.length = segments.length;
+  for (let index = 0; index < segments.length; index++) {
+    const segment = segments[index];
     const target = segmentTarget(segments, index, name, levels, head);
-    return {
-      value: target.value,
-      start: segment.start,
-      end: segment.end,
-      strength: target.strength,
-      limiting: target.limiting,
-    };
-  });
+    const row = (output[index] ??= {});
+    row.value = target.value;
+    row.start = segment.start;
+    row.end = segment.end;
+    row.strength = target.strength;
+    row.limiting = target.limiting;
+  }
+  return output;
 }
 
 /** Zero-phase critically damped smoothing (forward + backward one-pole). */
@@ -1357,36 +1356,38 @@ function planArticulation(
 ) {
   const channels = {};
   const targetOptions = { ...options, head };
+  const targets = [];
+  const dynamics = {
+    frameCount,
+    workspace: createDynamicsWorkspace(segments.length),
+  };
   for (const name of names) {
-    const targets = channelTargets(segments, name, targetOptions);
+    channelTargets(segments, name, targetOptions, targets);
     const { timeConstant, lead } = articulatorFor(
       name,
       head,
       options.articulators?.[name]
     );
+    dynamics.lead = lead;
+    dynamics.limited = LIMITED_LEADS.has(name);
+    dynamics.fallback = DEFAULTS[name];
     channels[name] = approachTargets(
       targets,
       timeConstant,
       frameRate,
       DYNAMICS_ORDER,
-      {
-        lead,
-        limited: LIMITED_LEADS.has(name),
-        frameCount,
-        fallback: DEFAULTS[name],
-      }
+      dynamics
     );
   }
   return channels;
 }
 
-function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
+function timedSegments(ipa, options, config) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
   realiseEmotions(tokens);
   const { head, table, tunes } = config;
-  const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
     rate: head.speechRate,
     language: options.language,
@@ -1402,6 +1403,19 @@ function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
   if (options.durations) {
     applyDurations(segments, tokens, options.durations);
   }
+  return { tokens, segments };
+}
+
+/** Reuse the head and language settings when timing several IPA words. */
+export function createUtteranceTimingPlanner(options) {
+  const config = accentedHead(options);
+  return (ipa) => timedSegments(ipa, options, config).segments;
+}
+
+function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
+  const { head, tunes } = config;
+  const { tokens, segments } = timedSegments(ipa, options, config);
+  const frameRate = options.frameRate ?? CONTROL_RATE;
   const duration = segments.at(-1).end;
   const frameCount = Math.ceil(duration * frameRate) + 1;
   const modes = planModes(segments);

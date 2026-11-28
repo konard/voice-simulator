@@ -216,7 +216,33 @@ function sample(
   });
 }
 
-export function createSpanScorer(frames, landmarks, track) {
+/** A phrase revisits its pending spans on each chunk. Reuse their term rows. */
+export function createSpanPool() {
+  const rows = [];
+  let cursor = 0;
+  return {
+    reset() {
+      cursor = 0;
+    },
+    take(width) {
+      let row = rows[cursor];
+      if (row?.long.length !== width) {
+        row = spanRow(width);
+        if (cursor < 1024) {
+          rows[cursor] = row;
+        }
+      }
+      cursor++;
+      return row;
+    },
+  };
+}
+
+function spanRow(width) {
+  return { terms: new Float64Array(3 * width), long: new Uint8Array(width) };
+}
+
+export function createSpanScorer(frames, landmarks, track, pool) {
   const means = new Float64Array(
     TEMPLATE_CHANNELS.length * TEMPLATE_POINTS.length
   );
@@ -230,8 +256,8 @@ export function createSpanScorer(frames, landmarks, track) {
     const duration = end - start;
     const frameCount = classCounts(frames, landmarks, start, end, counts);
     sample(track, sampled, start, duration, means, precision);
-    const terms = new Float64Array(phones.length * 3);
-    const long = new Uint8Array(phones.length);
+    const row = pool?.take(phones.length) ?? spanRow(phones.length);
+    const { terms, long } = row;
     phones.forEach((unit, index) => {
       let acoustic = 0;
       let mismatch = 0;
@@ -249,7 +275,7 @@ export function createSpanScorer(frames, landmarks, track) {
       terms[index * 3 + 1] = 2 * Math.log(duration / unit.duration) ** 2;
       terms[index * 3 + 2] = mismatch / frameCount;
     });
-    return { terms, long };
+    return row;
   };
 }
 
@@ -290,6 +316,7 @@ export function prepareDecode(
     templatesForTime = () => templates,
     whisperSpans = [],
     whisperScore = null,
+    spanPool,
   } = {}
 ) {
   const { times: original, pauses } = decodeBoundaries(
@@ -305,7 +332,8 @@ export function prepareDecode(
     whisperSpans,
     bounds
   );
-  const score = createSpanScorer(frames, landmarks, track);
+  spanPool?.reset();
+  const score = createSpanScorer(frames, landmarks, track, spanPool);
   return {
     times,
     spans: scoreBoundaries({

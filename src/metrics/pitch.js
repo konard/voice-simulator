@@ -5,9 +5,9 @@
  */
 
 import {
-  ANALYSIS_RATE,
+  voiceAnalysisInput,
+  createYinWorkspace,
   percentile,
-  resample,
   yinPitch,
 } from '../analysis/voice-features.js';
 
@@ -17,8 +17,6 @@ export const VOICED_APERIODICITY = 0.35;
 const QUIET_SHARE = 0.1;
 /** Relative pitch difference above which a voiced frame is a gross error. */
 const GROSS_ERROR = 0.2;
-/** Longest YIN lag (60 Hz) at the analysis rate, padded after the signal. */
-const MIN_F0 = 60;
 
 /**
  * Pitch (Hz) every `hop` seconds, 0 for unvoiced frames. The recording is
@@ -33,31 +31,37 @@ const MIN_F0 = 60;
  * @returns {Float64Array}
  */
 export function pitchTrack(samples, sampleRate, options = {}) {
-  const { samples: signal, sampleRate: rate } = resample(
+  const { samples: signal, sampleRate: rate } = voiceAnalysisInput(
     samples,
-    sampleRate,
-    ANALYSIS_RATE
+    sampleRate
   );
   const hop = Math.max(1, Math.round((options.hop ?? 0.01) * rate));
   const length = Math.max(1, Math.round((options.window ?? 0.04) * rate));
   const count = Math.ceil(signal.length / hop);
-  const padded = new Float64Array(
-    count * hop + length + Math.ceil(rate / MIN_F0) + 2
-  );
-  padded.set(signal);
   const levels = new Float64Array(count);
   for (let frame = 0; frame < count; frame++) {
     let sum = 0;
-    for (let index = frame * hop; index < frame * hop + length; index++) {
-      sum += padded[index] * padded[index];
+    const start = frame * hop;
+    const end = Math.min(start + length, signal.length);
+    for (let index = start; index < end; index++) {
+      sum += signal[index] * signal[index];
     }
     levels[frame] = Math.sqrt(sum / length);
   }
   const quiet = QUIET_SHARE * percentile(levels, 0.95);
   const track = new Float64Array(count);
+  const yin = createYinWorkspace(rate);
+  const pitch = { f0: 0, aperiodicity: 0 };
   for (let frame = 0; frame < count; frame++) {
     if (levels[frame] > 0 && levels[frame] >= quiet) {
-      const { f0, aperiodicity } = yinPitch(padded, frame * hop, length, rate);
+      const { f0, aperiodicity } = yinPitch(
+        signal,
+        frame * hop,
+        length,
+        rate,
+        yin,
+        pitch
+      );
       track[frame] = aperiodicity < VOICED_APERIODICITY ? f0 : 0;
     }
   }
@@ -96,30 +100,33 @@ function pearson(xs, ys) {
  */
 export function f0Errors(reference, test) {
   const frames = Math.min(reference.length, test.length);
-  const cents = [];
   const logR = [];
   const logT = [];
+  let sum = 0;
+  let squares = 0;
   let gross = 0;
   let voicing = 0;
   for (let index = 0; index < frames; index++) {
     const r = reference[index];
     const t = test[index];
     if (r > 0 && t > 0) {
-      cents.push(1200 * Math.log2(t / r));
+      const ratio = t / r;
+      const cents = 1200 * Math.log2(ratio);
+      sum += cents;
+      squares += cents * cents;
       logR.push(Math.log(r));
       logT.push(Math.log(t));
-      if (Math.abs(t / r - 1) > GROSS_ERROR) {
+      if (Math.abs(ratio - 1) > GROSS_ERROR) {
         gross++;
       }
     } else if (r > 0 || t > 0) {
       voicing++;
     }
   }
-  const voiced = cents.length;
-  const mean = (values) => values.reduce((sum, v) => sum + v, 0) / voiced;
+  const voiced = logR.length;
   return {
-    rmseCents: voiced ? Math.sqrt(mean(cents.map((e) => e * e))) : null,
-    meanCents: voiced ? mean(cents) : null,
+    rmseCents: voiced ? Math.sqrt(squares / voiced) : null,
+    meanCents: voiced ? sum / voiced : null,
     gpe: voiced ? gross / voiced : null,
     vde: frames ? voicing / frames : null,
     ffe: frames ? (gross + voicing) / frames : null,

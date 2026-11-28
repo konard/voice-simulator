@@ -215,7 +215,7 @@ let chineseInverse;
 function inverseChinese() {
   if (!chineseInverse) {
     const best = new Map();
-    const counts = getCounts('zh').counts;
+    const { wordCount } = getCounts('zh');
     for (const [char, readings] of characterReadings()) {
       for (const reading of readings) {
         const syllable = pinyinSyllableToIpa(reading);
@@ -223,7 +223,7 @@ function inverseChinese() {
           continue;
         }
         const ipa = syllableWithTone(syllable, true);
-        const count = counts.get(char) ?? 0;
+        const count = wordCount(char) ?? 0;
         if (!best.has(ipa) || count > best.get(ipa).count) {
           best.set(ipa, { char, count, reading, tokens: parseIpa(ipa).tokens });
         }

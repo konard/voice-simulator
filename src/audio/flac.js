@@ -10,7 +10,7 @@
  * CRC-16. MD5 signatures are written as "unset" and not checked.
  */
 
-import { mixdown, quantize, readTag, sampleFormat, toChannels } from './pcm.js';
+import { quantize, readTag, sampleFormat, toChannels } from './pcm.js';
 
 /** Bit depths the FLAC encoder writes. */
 export const FLAC_BIT_DEPTHS = Object.freeze([8, 16, 24]);
@@ -472,6 +472,9 @@ function readResidual(reader, out, size, order) {
   const partitionOrder = reader.read(4);
   const partitions = 2 ** partitionOrder;
   let index = order;
+  if (size % partitions !== 0 || size / partitions < order) {
+    out.fill(0, order, size);
+  }
   for (let partition = 0; partition < partitions; partition++) {
     const count = size / partitions - (partition === 0 ? order : 0);
     const parameter = reader.read(parameterBits);
@@ -503,7 +506,7 @@ function predict(out, order, coefficients, shift, size) {
   }
 }
 
-function readSubframe(reader, size, bitDepth) {
+function readSubframe(reader, out, size, bitDepth) {
   if (reader.read(1) !== 0) {
     throw new Error('Invalid FLAC subframe padding');
   }
@@ -513,9 +516,8 @@ function readSubframe(reader, size, bitDepth) {
     wasted = reader.readUnary() + 1;
   }
   const bits = bitDepth - wasted;
-  const out = new Float64Array(size);
   if (type === 0) {
-    out.fill(reader.readSigned(bits));
+    out.fill(reader.readSigned(bits), 0, size);
   } else if (type === 1) {
     for (let index = 0; index < size; index++) {
       out[index] = reader.readSigned(bits);
@@ -551,7 +553,6 @@ function readSubframe(reader, size, bitDepth) {
       out[index] *= 2 ** wasted;
     }
   }
-  return out;
 }
 
 function readFrameNumber(reader) {
@@ -597,18 +598,18 @@ function frameRate(code, reader, fallback) {
   return reader.read(16) * (code === 13 ? 1 : 10);
 }
 
-function decorrelate(assignment, subframes) {
+function decorrelate(assignment, subframes, size) {
   const [first, second] = subframes;
   if (assignment === 8) {
-    for (let index = 0; index < first.length; index++) {
+    for (let index = 0; index < size; index++) {
       second[index] = first[index] - second[index];
     }
   } else if (assignment === 9) {
-    for (let index = 0; index < first.length; index++) {
+    for (let index = 0; index < size; index++) {
       first[index] += second[index];
     }
   } else if (assignment === 10) {
-    for (let index = 0; index < first.length; index++) {
+    for (let index = 0; index < size; index++) {
       const side = second[index];
       const mid = first[index] * 2 + (side & 1);
       first[index] = (mid + side) / 2;
@@ -617,7 +618,7 @@ function decorrelate(assignment, subframes) {
   }
 }
 
-function readFrame(reader, info) {
+function readFrame(reader, info, subframes) {
   const start = reader.position;
   const sync = reader.read(15);
   if (sync !== 0x7ffc) {
@@ -638,21 +639,23 @@ function readFrame(reader, info) {
   if (assignment > 10) {
     throw new Error('Reserved FLAC channel assignment');
   }
-  const subframes = [];
   for (let channel = 0; channel < channels; channel++) {
     const side =
       (assignment === 8 && channel === 1) ||
       (assignment === 9 && channel === 0) ||
       (assignment === 10 && channel === 1);
-    subframes.push(readSubframe(reader, size, bitDepth + (side ? 1 : 0)));
+    if (!(subframes[channel]?.length >= size)) {
+      subframes[channel] = new Float64Array(size);
+    }
+    readSubframe(reader, subframes[channel], size, bitDepth + (side ? 1 : 0));
   }
   reader.align();
   const crc = crc16(reader.bytes, start, reader.position);
   if (reader.read(16) !== crc) {
     throw new Error('FLAC frame CRC mismatch');
   }
-  decorrelate(assignment, subframes);
-  return { subframes, bitDepth };
+  decorrelate(assignment, subframes, size);
+  return { size, channels, bitDepth };
 }
 
 /**
@@ -671,13 +674,82 @@ export function flacStart(bytes) {
   return 10 + size;
 }
 
+function mixFrame(subframes, { channels, bitDepth }, output, offset, count) {
+  const scale = 2 ** (bitDepth - 1);
+  for (let frame = 0; frame < count; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels; channel++) {
+      sum += subframes[channel][frame] / scale;
+    }
+    output[offset + frame] = sum / channels;
+  }
+}
+
+function joinFrames(blocks, length, allocate) {
+  const samples = allocate ? allocate(length) : new Float32Array(length);
+  let offset = 0;
+  for (const block of blocks) {
+    const take = Math.min(block.length, length - offset);
+    samples.set(block.subarray(0, take), offset);
+    offset += take;
+  }
+  return samples;
+}
+
+function decodeFrames(reader, info, maxSeconds, allocate) {
+  const blocks = [];
+  // Predictors and stereo decorrelation need full-precision samples within
+  // one frame. Reuse those channel buffers and retain only the mono audio.
+  const subframes = [];
+  checkAudioDuration(info.total, info.sampleRate, maxSeconds);
+  // A known length lets us mix into the result as frames arrive. Bound the
+  // allocation from untrusted metadata to 4 MiB.
+  const output =
+    info.total && info.total <= 1024 * 1024
+      ? allocate
+        ? allocate(info.total)
+        : new Float32Array(info.total)
+      : null;
+  let frames = 0;
+  while (reader.position + 2 <= reader.bytes.length) {
+    if (reader.bytes[reader.position] !== 0xff) {
+      break;
+    }
+    const frame = readFrame(reader, info, subframes);
+    const offset = frames;
+    frames += frame.size;
+    checkAudioDuration(frames, info.sampleRate, maxSeconds);
+    if (output) {
+      mixFrame(
+        subframes,
+        frame,
+        output,
+        offset,
+        Math.min(frame.size, output.length - offset)
+      );
+    } else {
+      const mono = new Float32Array(frame.size);
+      mixFrame(subframes, frame, mono, 0, frame.size);
+      blocks.push(mono);
+    }
+  }
+  const length = info.total ? Math.min(info.total, frames) : frames;
+  if (!output) {
+    return joinFrames(blocks, length, allocate);
+  }
+  if (output.length === length) {
+    return output;
+  }
+  return allocate ? output.subarray(0, length) : output.slice(0, length);
+}
+
 /**
  * Decode a FLAC file to mono floats (all channels are averaged).
  * @param {Uint8Array} bytes
  * @param {number} [maxSeconds]
  * @returns {{sampleRate: number, samples: Float32Array, channels: number, bitDepth: number, float: boolean}}
  */
-export function decodeFlac(bytes, maxSeconds = Infinity) {
+export function decodeFlac(bytes, maxSeconds = Infinity, allocate) {
   const position = flacStart(bytes);
   if (readTag(bytes, position) !== 'fLaC') {
     throw new Error('Not a FLAC file');
@@ -699,39 +771,9 @@ export function decodeFlac(bytes, maxSeconds = Infinity) {
     }
     reader.position = next;
   }
-  const blocks = [];
-  checkAudioDuration(info.total, info.sampleRate, maxSeconds);
-  let frames = 0;
-  while (reader.position + 2 <= bytes.length) {
-    if (bytes[reader.position] !== 0xff) {
-      break;
-    }
-    const { subframes, bitDepth } = readFrame(reader, info);
-    frames += subframes[0].length;
-    checkAudioDuration(frames, info.sampleRate, maxSeconds);
-    const scale = 2 ** (bitDepth - 1);
-    const interleaved = new Float64Array(
-      subframes[0].length * subframes.length
-    );
-    subframes.forEach((channel, index) => {
-      for (let frame = 0; frame < channel.length; frame++) {
-        interleaved[frame * subframes.length + index] = channel[frame] / scale;
-      }
-    });
-    blocks.push(mixdown(interleaved, subframes.length));
-  }
-  const samples = new Float32Array(
-    info.total ? Math.min(info.total, frames) : frames
-  );
-  let offset = 0;
-  for (const block of blocks) {
-    const take = Math.min(block.length, samples.length - offset);
-    samples.set(block.subarray(0, take), offset);
-    offset += take;
-  }
   return {
     sampleRate: info.sampleRate,
-    samples,
+    samples: decodeFrames(reader, info, maxSeconds, allocate),
     channels: info.channels,
     bitDepth: info.bitDepth,
     float: false,

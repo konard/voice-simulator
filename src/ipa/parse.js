@@ -32,6 +32,7 @@ import { SOUND_NAMES, isDefaultMode } from '../markup/modes.js';
 import { ModeStack, wordSpans, writeMarks } from './marks.js';
 
 const SUPERSCRIPT_TONES = { '¹': 1, '²': 2, '³': 3, '⁴': 4, '⁵': 5 };
+const WRITTEN_TONES = Object.keys(TONE_LETTERS);
 
 /** Symbols that IPA writers commonly substitute with lookalikes. */
 const ALIASES = { g: 'ɡ', ':': 'ː', "'": 'ˈ', ʦ: 't', ʧ: 't', ʤ: 'd' };
@@ -123,23 +124,10 @@ function lastVowel(tokens) {
   return null;
 }
 
-/** Characters of normalised text with aliases and ligatures expanded. */
-function expandLigatures(normalized) {
-  const chars = [];
-  for (const raw of normalized) {
-    const char = ALIASES[raw] ?? raw;
-    chars.push(char);
-    if (LIGATURE_TAILS[raw]) {
-      chars.push('\u0361', LIGATURE_TAILS[raw]);
-    }
-  }
-  return chars;
-}
-
 function addTone(state, level) {
   const target = lastVowel(state.tokens);
   if (target) {
-    target.tone = [...(target.tone ?? []), level];
+    (target.tone ??= []).push(level);
   }
 }
 
@@ -239,7 +227,7 @@ function addSegment(state, char, phoneme) {
       state.pendingEmphasis = false;
     }
   }
-  if (!state.wordModes.has(state.word)) {
+  if (state.wordModes && !state.wordModes.has(state.word)) {
     state.wordModes.set(state.word, state.modes.mode);
   }
   state.tokens.push(segment);
@@ -348,8 +336,17 @@ function addSound(state, symbol, written) {
 }
 
 function consumeText(state, text) {
-  for (const char of expandLigatures(text)) {
-    consumeChar(state, char);
+  for (let index = 0; index < text.length; index++) {
+    let raw = text[index];
+    if (text.codePointAt(index) > 0xffff) {
+      raw += text[++index];
+    }
+    consumeChar(state, ALIASES[raw] ?? raw);
+    const tail = LIGATURE_TAILS[raw];
+    if (tail) {
+      consumeChar(state, '\u0361');
+      consumeChar(state, tail);
+    }
   }
 }
 
@@ -379,31 +376,8 @@ function consumeChunk(state, chunk) {
   consumeText(state, chunk.slice(index));
 }
 
-/**
- * Parse an IPA string.
- * @param {string} text
- * @returns {{tokens: object[], unknown: string[], modes: {from: number, to: number, mode: object}[]}}
- *   `modes` are the spans of the brace marks and `ˈˈ` in IPA word indexes
- *   (`token.word`; `to` is exclusive).
- */
-export function parseIpa(text) {
-  const state = {
-    tokens: [],
-    unknown: [],
-    word: 0,
-    pendingStress: 0,
-    pendingSyllable: false,
-    pendingEmphasis: false,
-    pendingContour: null,
-    parenDepth: 0,
-    pendingTie: false,
-    modes: new ModeStack(),
-    wordModes: new Map(),
-    emphasized: new Set(),
-    sounds: 0,
-    soundModes: [],
-  };
-  for (const [chunk] of normalizeText(text).matchAll(CHUNKS)) {
+function consumeMarkup(state, text) {
+  for (const [chunk] of text.matchAll(CHUNKS)) {
     if (/^\s/u.test(chunk)) {
       consumeText(state, chunk);
     } else if (chunk.startsWith('{') || chunk.endsWith('}')) {
@@ -414,6 +388,50 @@ export function parseIpa(text) {
       consumeChunk(state, chunk);
     }
   }
+}
+
+/**
+ * Parse an IPA string.
+ * @param {string} text
+ * @returns {{tokens: object[], unknown: string[], modes: {from: number, to: number, mode: object}[]}}
+ *   `modes` are the spans of the brace marks and `ˈˈ` in IPA word indexes
+ *   (`token.word`; `to` is exclusive).
+ */
+export function parseIpa(text) {
+  const normalized = normalizeText(text);
+  if (normalized.length === 1 && !LIGATURE_TAILS[normalized]) {
+    const symbol = ALIASES[normalized] ?? normalized;
+    const phoneme = getPhoneme(symbol);
+    if (phoneme) {
+      return {
+        tokens: [createSegment(symbol, phoneme, 0)],
+        unknown: [],
+        modes: [],
+      };
+    }
+  }
+  const markup = /[{}⸨(]|ˈˈ/u.test(normalized);
+  const state = {
+    tokens: [],
+    unknown: [],
+    word: 0,
+    pendingStress: 0,
+    pendingSyllable: false,
+    pendingEmphasis: false,
+    pendingContour: null,
+    parenDepth: 0,
+    pendingTie: false,
+    modes: markup ? new ModeStack() : null,
+    wordModes: markup ? new Map() : null,
+    emphasized: markup ? new Set() : null,
+    sounds: 0,
+    soundModes: markup ? [] : null,
+  };
+  if (markup) {
+    consumeMarkup(state, normalized);
+  } else {
+    consumeText(state, normalized);
+  }
   while (
     state.tokens.at(-1)?.kind === 'pause' &&
     state.tokens.at(-1).strength === 0
@@ -423,10 +441,9 @@ export function parseIpa(text) {
   return {
     tokens: state.tokens,
     unknown: state.unknown,
-    modes: [
-      ...wordSpans(state.wordModes, state.emphasized),
-      ...state.soundModes,
-    ],
+    modes: markup
+      ? [...wordSpans(state.wordModes, state.emphasized), ...state.soundModes]
+      : [],
   };
 }
 
@@ -449,9 +466,7 @@ function tokenText(token) {
   }
   text += token.symbol;
   if (token.tone) {
-    text += token.tone
-      .map((level) => Object.keys(TONE_LETTERS)[5 - level])
-      .join('');
+    text += token.tone.map((level) => WRITTEN_TONES[5 - level]).join('');
   }
   return text;
 }

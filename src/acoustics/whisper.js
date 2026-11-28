@@ -267,6 +267,13 @@ export function whisperyGain(whisper) {
   return 10 ** ((WHISPERY_BOOST * 4 * share * (1 - share)) / 20);
 }
 
+/** Store the gains shared by all whisper noise samples of a control block. */
+export function prepareWhisperGains(control, pitch, gains) {
+  gains.drive = whisperDrive(control);
+  gains.pitch = whisperPitchGain(control.f0, pitch ?? DEFAULT_PITCH);
+  gains.mix = whisperyGain(control.whisper ?? 0);
+}
+
 /**
  * The whisper noise sample (before the source's aspiration level and the
  * 0.45 of the breath noise): `noise` times the drive, the turbulence
@@ -276,15 +283,18 @@ export function whisperyGain(whisper) {
  * @param {number} noise Band-passed white noise.
  * @param {number} strength Relative turbulence strength at the glottis.
  * @param {number} [pitch] head.pitch (Hz, default DEFAULT_PITCH).
+ * @param {{drive: number, pitch: number, mix: number}} [gains]
  */
-export function whisperNoise(control, noise, strength, pitch) {
+export function whisperNoise(control, noise, strength, pitch, gains) {
   return (
     noise *
-    whisperDrive(control) *
+    (gains ? gains.drive : whisperDrive(control)) *
     strength *
     WHISPER_GAIN *
-    whisperPitchGain(control.f0, pitch ?? DEFAULT_PITCH) *
-    whisperyGain(control.whisper ?? 0)
+    (gains
+      ? gains.pitch
+      : whisperPitchGain(control.f0, pitch ?? DEFAULT_PITCH)) *
+    (gains ? gains.mix : whisperyGain(control.whisper ?? 0))
   );
 }
 

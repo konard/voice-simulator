@@ -122,9 +122,13 @@ function polyline(points, x) {
     return points[0][1];
   }
   for (let index = 1; index < points.length; index++) {
-    const [x1, y1] = points[index];
+    const right = points[index];
+    const x1 = right[0];
     if (x <= x1) {
-      const [x0, y0] = points[index - 1];
+      const left = points[index - 1];
+      const x0 = left[0];
+      const y0 = left[1];
+      const y1 = right[1];
       return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
     }
   }

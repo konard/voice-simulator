@@ -11,29 +11,34 @@ export function createWordTrie({
   tokens,
   entriesAt,
 }) {
-  const children = new Uint32Array(offsets.at(-1));
-  for (let i = 0; i < children.length; i++) {
-    children[i] = i + 1;
-  }
-  const topology = new Uint32Array(
-    offsets.length + children.length + feature.length + terminal.length
-  );
-  let start = 0;
-  for (const column of [offsets, children, feature, terminal]) {
-    topology.set(column, start);
-    start += column.length;
-  }
   const tokenGaps = tokens.map(gapCost);
-  const gaps = new Float64Array(feature.length);
-  for (let i = 1; i < gaps.length; i++) {
-    gaps[i] = tokenGaps[feature[i]];
-  }
   return {
-    topology,
+    get nodeCount() {
+      return feature.length;
+    },
+    writePackedTopology(target) {
+      target.set(offsets);
+      for (let i = 0; i < feature.length; i++) {
+        target[offsets.length + i] = 2 * feature[i] + terminal[i];
+      }
+    },
+    writeTopology(target) {
+      target.set(offsets);
+      for (let i = 1; i < feature.length; i++) {
+        target[offsets.length + i - 1] = i;
+      }
+      target.set(feature, 2 * feature.length);
+      target.set(terminal, 3 * feature.length);
+    },
+    writeGaps(target) {
+      target[0] = 0;
+      for (let i = 1; i < feature.length; i++) {
+        target[i] = tokenGaps[feature[i]];
+      }
+    },
     offsets,
-    children,
     feature,
-    gaps,
+    tokenGaps,
     terminal,
     entriesAt,
     tokens,
@@ -75,8 +80,12 @@ function pack(lexicon, language) {
 }
 
 export function packWordTrie(lexicon, language) {
+  const prepared = lexicon.prepared;
+  if (prepared) {
+    return prepared.table;
+  }
   if (!cached.has(lexicon)) {
-    cached.set(lexicon, lexicon.prepared?.table ?? pack(lexicon, language));
+    cached.set(lexicon, pack(lexicon, language));
   }
   return cached.get(lexicon);
 }

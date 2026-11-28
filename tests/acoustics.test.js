@@ -29,7 +29,7 @@ import {
 import { tubeFormants } from '../src/acoustics/transfer.js';
 import { Biquad } from '../src/acoustics/filters.js';
 import { Waveguide } from '../src/acoustics/waveguide.js';
-import { analyzeVoice, synthesize } from '../src/index.js';
+import { analyzeVoice, prepareUtterance, synthesize } from '../src/index.js';
 import { createRandom, randomNormal } from '../src/random.js';
 import { encodeWav, decodeWav, wavHeader } from '../src/audio/wav.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
@@ -160,6 +160,41 @@ function segmentLevel(samples, plan, index) {
 }
 
 describe('LF glottal pulse', () => {
+  it('shares control values across samples without changing the source', () => {
+    const ordinary = new Glottis({ seed: 5, chink: 2 });
+    const prepared = new Glottis({ seed: 5, chink: 2 });
+    const control = {
+      f0: 143,
+      voicing: 0.85,
+      aspiration: 0.1,
+      closure: 0.07,
+      loudness: 0.63,
+      effort: 2,
+      breath: 0.14,
+      creak: 0.1,
+      falsetto: 0.2,
+      harsh: 0.25,
+    };
+    for (const whisper of [0, 0.4, 1, 0]) {
+      control.whisper = whisper;
+      prepared.prepareBlock(control);
+      for (let i = 0; i < 256; i++) {
+        control.whisperNoise = Math.sin(i);
+        const noise = Math.cos(i);
+        expect(prepared.step(1 / RATE, control, noise)).toBe(
+          ordinary.step(1 / RATE, control, noise)
+        );
+        if (i % 64 === 0) {
+          const instant = { ...control, effort: -3 };
+          expect(prepared.step(1 / RATE, instant, noise)).toBe(
+            ordinary.step(1 / RATE, instant, noise)
+          );
+        }
+      }
+    }
+    expect(prepared.saveState()).toEqual(ordinary.saveState());
+  });
+
   it('has a negative main excitation and returns to zero', () => {
     const pulse = lfParameters(0.6);
     let minimum = 0;
@@ -326,6 +361,19 @@ describe('waveguide synthesis', () => {
       total += renderer.render(block);
     }
     expect(Math.abs(total - plan.duration * RATE)).toBeLessThan(130);
+  });
+
+  it('reuses offline waveguide shapes without changing mixed-source audio', () => {
+    for (const source of ['lf', 'folds']) {
+      const { plan, renderOptions } = prepareUtterance(
+        'Ma. [whisper]Sat.[/whisper] Ma.',
+        { markup: true, tier: 'telephone', engine: 'js', source }
+      );
+      const renderer = new VoiceRenderer(plan, renderOptions);
+      const expected = new Float32Array(renderer.totalSamples);
+      renderer.render(expected);
+      expect(renderPlan(plan, renderOptions)).toEqual(expected);
+    }
   });
 
   it('exposes the pressure field of the tract for visualisation', () => {

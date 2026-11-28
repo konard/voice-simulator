@@ -1,5 +1,6 @@
 /** Public audio recognition and shared batch/stream composition. Unlicense. */
 import { resample } from '../audio/resample.js';
+import { samplesAreFinite } from '../audio/sample-validation.js';
 import { LANGUAGES } from '../g2p/index.js';
 import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
@@ -9,6 +10,7 @@ import {
   HMM_LOW_MULTILINGUAL_SEARCH,
 } from './hmm-decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
+import { withFrameStorage } from './frame-storage.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
 import { recognitionInput } from './input.js';
@@ -29,10 +31,7 @@ import { aggregate, translated } from './recognizer-result.js';
 import { pauseCuts } from './recognizer-pauses.js';
 import { realiseChineseTones } from './zh-tones.js';
 
-import {
-  createConfiguredRecognizer,
-  usesWordPhrases,
-} from './recognizer-stream.js';
+import { recognizeWordPhrases, usesWordPhrases } from './recognizer-stream.js';
 
 export { createRecognizer } from './recognizer-stream.js';
 
@@ -44,7 +43,6 @@ export const RECOGNITION_LEVELS = Object.freeze({
 
 // Short commands can afford a wider search and have less context.
 const WIDE_SEARCH_SECONDS = 4;
-const batchWorkspaces = new Map();
 
 export function levelForTier(name) {
   if (name === 'telephone' || name === 'narrowband') {
@@ -61,7 +59,7 @@ export class RecognitionError extends Error {
   }
 }
 
-function checkOptions(languages, nbest, level) {
+export function recognitionLanguages(languages = Object.keys(LANGUAGES)) {
   if (
     !Array.isArray(languages) ||
     !languages.length ||
@@ -70,6 +68,10 @@ function checkOptions(languages, nbest, level) {
   ) {
     throw new RangeError('languages must contain distinct supported codes');
   }
+  return [...languages];
+}
+
+function checkOptions(nbest, level) {
   if (!Number.isInteger(nbest) || nbest < 1 || nbest > 10) {
     throw new RangeError('nbest must be an integer from 1 to 10');
   }
@@ -97,7 +99,7 @@ function checkDecoder(decoder = 'words') {
 
 export function recognitionSettings(options) {
   const {
-    languages = Object.keys(LANGUAGES),
+    languages,
     voice = null,
     nbest = 1,
     segments = false,
@@ -111,7 +113,8 @@ export function recognitionSettings(options) {
     deterministic = false,
     articulationOffsets,
   } = options;
-  checkOptions(languages, nbest, level);
+  const supportedLanguages = recognitionLanguages(languages);
+  checkOptions(nbest, level);
   const decoder = checkDecoder(options.decoder);
   if (rescoring && typeof rescoreHypotheses !== 'function') {
     throw new RecognitionError(
@@ -120,7 +123,7 @@ export function recognitionSettings(options) {
     );
   }
   return {
-    languages: [...languages],
+    languages: supportedLanguages,
     voice,
     nbest,
     segments,
@@ -167,10 +170,8 @@ export function validateRate(sampleRate) {
 }
 
 export function validateSamples(samples) {
-  for (let i = 0; i < samples.length; i++) {
-    if (!Number.isFinite(samples[i])) {
-      throw new RangeError('Audio samples must be finite');
-    }
+  if (!samplesAreFinite(samples)) {
+    throw new RangeError('Audio samples must be finite');
   }
 }
 
@@ -227,6 +228,17 @@ export function decodeRecognitionAudio(
         languages: settings.languages,
         whisper: options.whisper,
         oov: settings.oov,
+        profile: settings.profile,
+        kernels: settings.kernels,
+        search: settings.search,
+        maxWords: settings.maxWords,
+        includeModeFrames: settings.includeModeLabels,
+        includeWords: Boolean(
+          wordOptions?.useModelWords ||
+          wordOptions?.frontEnd ||
+          settings.hmmWordSpans
+        ),
+        includeSyllables: Boolean(wordOptions?.frontEnd),
         ...wordOptions,
       })
     );
@@ -350,7 +362,7 @@ function modelText(sounds, modelWords) {
     if (!heard.length) {
       continue;
     }
-    const { text, language, oov } = modelWords[id];
+    const { text, language, unknown } = modelWords[id];
     path.push({
       from: tokens.length,
       to: tokens.length + heard.length,
@@ -358,7 +370,7 @@ function modelText(sounds, modelWords) {
       ipa: heardIpa(heard),
       language,
       cost: 0,
-      unknown: oov,
+      unknown,
     });
     tokens.push(...heard);
   }
@@ -375,11 +387,11 @@ function liveWordResult(decoded, sounds) {
     }
     if (sound.modelWord !== index) {
       index = sound.modelWord;
-      const { text, language, oov } = decoded.words[index];
+      const { text, language, unknown } = decoded.words[index];
       path.push({
         word: text,
         language,
-        unknown: oov,
+        unknown,
         from: tokens.length,
         to: tokens.length,
         ipa: '',
@@ -409,7 +421,9 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
       settings.languages.length === 1 ? settings.languages[0] : undefined,
     voice: settings.voice ?? decoded.voice,
     pitch,
-    frames: decoded.frames?.speech ? decoded.frames : undefined,
+    get frames() {
+      return decoded.frames?.speech ? decoded.frames : undefined;
+    },
     whisperSpans: settings.whisper === false ? [] : decoded.whisperSpans,
   };
   const measured = measure(settings.profile, 'Prosody', () =>
@@ -552,7 +566,12 @@ export function noisyFrames(energy, count, seconds) {
   if (!energy || count === 0 || seconds <= 1) {
     return false;
   }
-  const sorted = energy.slice(0, count).sort((a, b) => a - b);
+  const sorted = energy.slice(0, count);
+  if (Array.isArray(sorted)) {
+    sorted.sort((a, b) => a - b);
+  } else {
+    sorted.sort();
+  }
   const size = Math.max(1, Math.floor(count / 5));
   let loud = 0;
   let quiet = 0;
@@ -584,19 +603,31 @@ function checkNoise(decoded, duration) {
   }
 }
 
+/** The batch result is complete before any of these columns are reused. */
+export function withBatchFrames(recognizeBatch) {
+  return withFrameStorage((frameStorage) =>
+    recognizeBatch({ framePitch: true, frameStorage })
+  );
+}
+
 function serial(samples, sampleRate, settings, level, unsplit) {
   if (!unsplit && usesWordPhrases(sampleRate, settings)) {
-    const stream = createConfiguredRecognizer(sampleRate, settings, true);
-    stream.on('error', (error) => {
-      throw error;
-    });
-    stream.push(
-      samples instanceof Float32Array ? samples : Float32Array.from(samples)
-    );
-    return stream.flush();
+    return recognizeWordPhrases(samples, sampleRate, settings);
   }
+  return usesWordDecoder(settings)
+    ? withBatchFrames((options) =>
+        decodeBatch(samples, sampleRate, settings, level, options)
+      )
+    : decodeBatch(samples, sampleRate, settings, level);
+}
+
+function decodeBatch(samples, sampleRate, settings, level, wordOptions) {
   let search;
-  if (level === 'low' && samples.length > WIDE_SEARCH_SECONDS * sampleRate) {
+  if (
+    wordOptions &&
+    level === 'low' &&
+    samples.length > WIDE_SEARCH_SECONDS * sampleRate
+  ) {
     search =
       settings.languages.length === 1
         ? HMM_LOW_BATCH_SEARCH
@@ -608,7 +639,7 @@ function serial(samples, sampleRate, settings, level, unsplit) {
     settings,
     level,
     undefined,
-    { search, workspaces: batchWorkspaces }
+    search ? { ...wordOptions, search } : wordOptions
   );
   checkNoise(decoded, samples.length / sampleRate);
   if (!heardSpeech(decoded, settings.minVoiced, settings.whisper)) {

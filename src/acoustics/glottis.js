@@ -22,7 +22,7 @@ import {
   effortVoicedGain,
   TILT_CORNER,
 } from '../articulation/effort.js';
-import { whisperNoise, whisperQuiet } from './whisper.js';
+import { prepareWhisperGains, whisperNoise, whisperQuiet } from './whisper.js';
 
 /**
  * Breath noise per 10 mm² of glottal chink (issue 35): the air leaking
@@ -233,6 +233,12 @@ export function lfWaveform(p, t) {
 }
 
 export class Glottis {
+  #stepBuffer = new Float64Array(2);
+  #blockControl;
+  #block = {};
+  #instant = {};
+  #whisperGains = { drive: 0, pitch: 1, mix: 1 };
+
   /**
    * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number, chink?: number, lungPressure?: number}} [options]
    *   `jitter` and `shimmer` are standard deviations in percent, `chink`
@@ -303,7 +309,7 @@ export class Glottis {
    * Without effort the high-pass still runs, so that a ramp starts without
    * a step.
    */
-  #tilt(voiced, dt, effort) {
+  #tilt(voiced, dt, { effort, tiltGain }) {
     if (dt !== this.tiltStep) {
       this.tiltStep = dt;
       this.tiltPole = 1 / (1 + 2 * Math.PI * TILT_CORNER * dt);
@@ -313,9 +319,7 @@ export class Glottis {
     this.tiltOutput = pole * (this.tiltOutput + middle - this.tiltMiddle);
     this.tiltInput = voiced;
     this.tiltMiddle = middle;
-    return effort === 0
-      ? voiced
-      : voiced + (this.tiltGain - 1) * this.tiltOutput;
+    return effort === 0 ? voiced : voiced + (tiltGain - 1) * this.tiltOutput;
   }
 
   /**
@@ -458,33 +462,17 @@ export class Glottis {
    * Advance the pulse phase by `dt`, and start the next period (at the f0
    * of the phonation channels) when it passes the end of this one.
    */
-  #advance(dt, f0, tenseness, creak, falsetto, harsh) {
+  #advance(dt, control, { tenseness, creak, falsetto, harsh }) {
     this.phase += dt;
     if (this.phase >= this.period) {
       this.phase -= this.period;
       this.#startPeriod(
-        phonationF0(f0, creak, falsetto),
+        phonationF0(control.f0, creak, falsetto),
         tenseness,
         creak,
         harsh
       );
     }
-  }
-
-  /**
-   * The intensity of the pulses with the falsetto level and the voiced
-   * gain of the effort (`effort` dB).
-   */
-  #intensityGain(intensity, falsetto, effort) {
-    let gained = intensity;
-    if (falsetto !== 0) {
-      gained *= 10 ** ((PHONATION_SOURCE.falsettoDecibels * falsetto) / 20);
-    }
-    if (effort !== 0) {
-      this.#effortGains(effort);
-      gained *= this.effortGain;
-    }
-    return gained;
   }
 
   /**
@@ -512,6 +500,61 @@ export class Glottis {
     return voiced;
   }
 
+  /** Prepare control-rate values for the built-in renderer's next block. */
+  prepareBlock(control) {
+    this.#blockControl = control;
+    this.#prepareControl(control, this.#block);
+    if (this.#block.whisper > 0) {
+      prepareWhisperGains(control, this.pitch, this.#whisperGains);
+    }
+  }
+
+  #prepareControl(control, values) {
+    const whisper = Math.min(1, Math.max(0, control.whisper ?? 0));
+    const voicedShare = 1 - whisper;
+    const voicing = Math.max(0, control.voicing) * (1 - control.closure);
+    const tension = control.tension ?? 0;
+    const base =
+      tension === 0
+        ? this.tenseness
+        : Math.min(1, Math.max(0, this.tenseness + tension));
+    const strength =
+      control.aspirationStrength ?? this.#tractStrength(control, whisper);
+    const harsh = control.harsh ?? 0;
+    const breathiness = noiseBreathiness(
+      this.breathiness,
+      control.breath ?? 0,
+      harsh
+    );
+    values.whisper = whisper;
+    values.voicedShare = voicedShare;
+    values.voicing = voicing;
+    values.level = voicing * Math.max(0, control.loudness);
+    values.tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
+    values.creak = control.creak ?? 0;
+    values.falsetto = control.falsetto ?? 0;
+    values.falsettoGain =
+      10 ** ((PHONATION_SOURCE.falsettoDecibels * values.falsetto) / 20);
+    values.harsh = harsh;
+    values.effort = control.effort ?? 0;
+    if (values.effort !== 0) {
+      this.#effortGains(values.effort);
+    }
+    values.effortGain = values.effort === 0 ? 1 : this.effortGain;
+    values.tiltGain = this.tiltGain;
+    values.strength = strength;
+    values.breath =
+      ((control.aspiration +
+        this.breathGain *
+          breathiness ** this.breathExponent *
+          voicing *
+          voicedShare) *
+        (1 - control.closure) +
+        (this.chinkNoise * this.chink) / 10) *
+      strength;
+    return values;
+  }
+
   /**
    * Advance by dt seconds and return the flow derivative sample.
    * @param {number} dt
@@ -534,33 +577,48 @@ export class Glottis {
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {
-    const whisper = Math.min(1, Math.max(0, control.whisper ?? 0));
-    const voicedShare = 1 - whisper;
-    const voicing = Math.max(0, control.voicing) * (1 - control.closure);
-    const loudness = Math.max(0, control.loudness);
-    const tension = control.tension ?? 0;
-    const base =
-      tension === 0
-        ? this.tenseness
-        : Math.min(1, Math.max(0, this.tenseness + tension));
-    const tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
-    const creak = control.creak ?? 0;
-    const falsetto = control.falsetto ?? 0;
-    const harsh = control.harsh ?? 0;
+    const buffer = this.#stepBuffer;
+    buffer[0] = noise;
+    buffer[1] = dt;
+    this.stepInto(buffer, control);
+    return buffer[0];
+  }
+
+  /** @internal Replace the noise at index 0 with the source sample. Index 1 holds dt. */
+  stepInto(buffer, control) {
+    const noise = buffer[0];
+    const dt = buffer[1];
+    const prepared = this.#blockControl === control;
+    const values = prepared
+      ? this.#block
+      : this.#prepareControl(control, this.#instant);
+    const {
+      whisper,
+      voicedShare,
+      voicing,
+      level,
+      tenseness,
+      falsetto,
+      falsettoGain,
+      effortGain,
+      strength,
+      breath,
+    } = values;
     if (voicedShare > 0) {
-      this.#advance(dt, control.f0, tenseness, creak, falsetto, harsh);
+      this.#advance(dt, control, values);
     }
     const t = this.phase / this.period;
-    const effort = control.effort ?? 0;
-    this.intensity = this.#intensityGain(
-      voicing * loudness * this.shimmer * this.pulseGain * voicedShare,
-      falsetto,
-      effort
-    );
+    this.intensity =
+      level *
+      this.shimmer *
+      this.pulseGain *
+      voicedShare *
+      falsettoGain *
+      effortGain;
     const voiced = this.#tilt(
       this.#voicedSample(t, tenseness, dt, falsetto),
       dt,
-      effort
+      values
     );
     // Aspiration is strongest while the folds are open.
     const opening = Math.max(0, Math.sin(2 * Math.PI * t));
@@ -569,24 +627,6 @@ export class Glottis {
         voicedShare +
       whisper;
     this.noiseModulation = modulation;
-    // The lung pressure carries the loudness: the strength grows as the
-    // pressure drop to the power 1.5, and the pressure as loudness^(2/3).
-    const strength =
-      control.aspirationStrength ?? this.#tractStrength(control, whisper);
-    const breathiness = noiseBreathiness(
-      this.breathiness,
-      control.breath ?? 0,
-      harsh
-    );
-    const breath =
-      ((control.aspiration +
-        this.breathGain *
-          breathiness ** this.breathExponent *
-          voicing *
-          voicedShare) *
-        (1 - control.closure) +
-        (this.chinkNoise * this.chink) / 10) *
-      strength;
     if (whisper > 0) {
       // The whisper noise: turbulence at the half-open glottis, not
       // modulated by pulses (src/acoustics/whisper.js).
@@ -594,13 +634,15 @@ export class Glottis {
         control,
         control.whisperNoise ?? noise,
         strength,
-        this.pitch
+        this.pitch,
+        prepared ? this.#whisperGains : undefined
       );
-      return (
+      buffer[0] =
         voiced +
-        (noise * breath * modulation + whispered) * 0.45 * this.aspirationLevel
-      );
+        (noise * breath * modulation + whispered) * 0.45 * this.aspirationLevel;
+    } else {
+      buffer[0] =
+        voiced + noise * breath * modulation * 0.45 * this.aspirationLevel;
     }
-    return voiced + noise * breath * modulation * 0.45 * this.aspirationLevel;
   }
 }

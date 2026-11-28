@@ -19,8 +19,15 @@ import {
   predictorFromReflection,
   resample,
   synthesize,
+  trackPitch,
 } from '../src/index.js';
-import { analyzeFrameHops } from '../src/recognition/frontend.js';
+import {
+  analyzeFrameHops,
+  analyzeOwnedFrames,
+  analyzePitchFrames,
+  analyzeWordFrames,
+  createSpeechAnalyzer,
+} from '../src/recognition/frontend.js';
 
 /** Every array of a frame set with its row width. */
 const COLUMNS = [
@@ -92,6 +99,89 @@ it('shares waveform analysis across hops while preserving independent noise trac
   const { fine, coarse } = analyzeFrameHops(samples, sampleRate);
   expect(fine).toEqual(analyzeFrames(samples, sampleRate, { hop: 0.005 }));
   expect(coarse).toEqual(analyzeFrames(samples, sampleRate, { hop: 0.01 }));
+});
+
+it('measures the pitch inputs without building unused spectral columns', () => {
+  const sampleRate = 16000;
+  const samples = whiteNoise(12001, -30, 77);
+  samples.fill(0, 0, 3200);
+  for (let i = 4000; i < 7600; i++) {
+    samples[i] += 0.2 * Math.sin((2 * Math.PI * 150 * i) / sampleRate);
+  }
+  samples.fill(0, 11500);
+  for (const rate of [sampleRate, 8000]) {
+    const options = { hop: 0.01, rate };
+    const full = analyzeFrames(samples, sampleRate, options);
+    const pitchOnly = analyzePitchFrames(samples, sampleRate, options);
+    expect(pitchOnly.energy).toEqual(full.energy);
+    expect(pitchOnly.noise).toEqual(full.noise);
+    expect(pitchOnly.mel).toBeUndefined();
+    expect(trackPitch(pitchOnly)).toEqual(trackPitch(full));
+  }
+});
+
+it('matches copied pitch frames at both edges of an 8 kHz sample view', () => {
+  const sampleRate = 8000;
+  const samples = whiteNoise(8347, -22, 88).subarray(19, 8293);
+  for (const hop of [0.005, 0.01]) {
+    const borrowed = analyzePitchFrames(samples, sampleRate, { hop });
+    const copied = analyzePitchFrames(Array.from(samples), sampleRate, { hop });
+    expect(borrowed.samples).toBe(samples);
+    expect(borrowed.count).toBe(copied.count);
+    expect(borrowed.energy).toEqual(copied.energy);
+    expect(borrowed.noise).toEqual(copied.noise);
+    expect(trackPitch(borrowed)).toEqual(trackPitch(copied));
+  }
+});
+
+it('analyzes an owned waveform without copying its samples or changing any frame', () => {
+  const rate = 8000;
+  const samples = whiteNoise(1683, -24, 331).subarray(9, 1610);
+  for (const size of [0, 7, 1601]) {
+    const view = samples.subarray(0, size);
+    const owned = analyzeOwnedFrames(view, rate, { hop: 0.01 });
+    const copied = analyzeFrames(view, rate, { hop: 0.01 });
+    expect(owned.samples).toBe(view);
+    expect(owned).toEqual({ ...copied, samples: view });
+  }
+});
+
+it('preserves the measurements used by word timing, whispers and mode labels', () => {
+  for (const rate of [8000, 16000]) {
+    const samples = whiteNoise(rate / 2 + 17, -30, rate);
+    samples.fill(0, 0, 421);
+    const complete = analyzeFrames(samples, rate, { hop: 0.01 });
+    const timing = analyzeWordFrames(samples, rate, undefined, false);
+    const modes = analyzeWordFrames(samples, rate, undefined, true);
+    const { zcr, tilt, cepstrum, gain, lpc, reflection, mel, band, ...gate } =
+      complete;
+    expect(timing).toEqual(gate);
+    expect(modes).toEqual({ ...gate, gain, lpc, reflection, mel, band });
+    expect({ ...modes, zcr, tilt, cepstrum }).toEqual(complete);
+  }
+});
+
+it('keeps the speech gate identical with compact streaming frames', () => {
+  const sampleRate = 16000;
+  const samples = whiteNoise(8001, -40, 77);
+  for (let i = 2000; i < 6200; i++) {
+    samples[i] += 0.15 * Math.sin((2 * Math.PI * 170 * i) / sampleRate);
+  }
+  const options = { rate: 8000, maxSeconds: 0.6 };
+  const full = createFrameAnalyzer(sampleRate, options);
+  const gate = createSpeechAnalyzer(sampleRate, options);
+  for (const analyzer of [full, gate]) {
+    analyzer.push(samples.subarray(0, 4000));
+    analyzer.trim(3);
+    analyzer.push(samples.subarray(4000));
+    analyzer.flush();
+  }
+  for (const column of ['energy', 'noise', 'periodicity', 'speech']) {
+    expect(gate.frames[column]).toEqual(full.frames[column]);
+  }
+  expect(gate.frames.sampleCount).toBe(full.frames.sampleCount);
+  expect(gate.frames.count).toBe(full.frames.count);
+  expect(gate.frames.mel).toBeUndefined();
 });
 
 describe('recognition front end: transforms', () => {
@@ -217,6 +307,19 @@ describe('recognition front end: frames', () => {
       expect(batch.count).toBe(expectedCount(batch));
       expect(stream.sampleCount).toBe(batch.sampleCount);
       expect(largestDifference(batch, stream) <= 1e-6).toBe(true);
+    }
+  });
+
+  it('writes resampled recording data directly with the same samples and frames as streaming', () => {
+    for (const rate of [16000, 44100, 12000.5]) {
+      const samples = whiteNoise(4099, -18, 73).subarray(11, 4082);
+      const options = { rate: 8000, maxSeconds: samples.length / rate };
+      const streaming = createFrameAnalyzer(rate, options);
+      for (let index = 0; index < samples.length; index += 97) {
+        streaming.push(samples.subarray(index, index + 97));
+      }
+      streaming.flush();
+      expect(analyzeFrames(samples, rate, options)).toEqual(streaming.frames);
     }
   });
 

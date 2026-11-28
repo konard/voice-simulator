@@ -11,7 +11,12 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { lfParameters } from '../src/acoustics/glottis.js';
-import { inverseFilterModeCues } from '../src/recognition/inverse-filter.js';
+import {
+  correlationPlan,
+  iaifPlan,
+  hann,
+} from '../src/recognition/inverse-dsp.js';
+import { inverseModeMeasures } from '../src/recognition/inverse-filter.js';
 import { highPass } from './helpers/recognition-truth.js';
 import {
   sourceVowel,
@@ -48,16 +53,82 @@ function vowel(tenseness = 0.5, f0 = 110, rate = 16000) {
   return cache.get(key);
 }
 
-describe('batch glottal inverse filter', () => {
-  it('measures the same mode cues when only vowel frames are requested', () => {
-    const { frames, pitch, result } = vowel(0.5, 110, 8000);
-    const rows = [4, 20, frames.count - 1];
-    const cues = inverseFilterModeCues(frames, rows, { pitch });
-    for (const key of ['h1h2Source', 'hnr', 'cpp']) {
-      expect(rows.map((row) => cues[key][row])).toEqual(
-        rows.map((row) => result[key][row])
+describe('inverse DSP workspaces', () => {
+  it('reuses window storage across edge padding, silence and shorter pulses', () => {
+    const samples = Float64Array.from({ length: 30 }, (_, i) => Math.sin(i));
+    const correlate = correlationPlan(17);
+    for (const centre of [0, 15, samples.length - 1]) {
+      expect(correlate(samples, centre)).toEqual(
+        correlationPlan(17)(samples, centre)
       );
-      expect(Number.isNaN(cues[key][0])).toBe(true);
+      expect(correlate(new Float64Array(samples.length), centre)).toEqual(
+        new Float64Array(17)
+      );
+    }
+    const plan = iaifPlan(8, 3, 0.99);
+    plan(samples, hann(samples.length));
+    const length = 19;
+    const window = hann(length);
+    const pulse = plan(samples, window);
+    const fresh = iaifPlan(8, 3, 0.99)(samples.subarray(0, length), window);
+    expect(pulse.d.subarray(0, length)).toEqual(fresh.d);
+    expect(pulse.g.subarray(0, length)).toEqual(fresh.g);
+  });
+});
+
+it('keeps rounded source cues across moving pitch and unvoiced gaps', () => {
+  const { samples, rate, f0 } = vowel(0.5, 110, 8000);
+  const { frames, pitch } = known(
+    samples.subarray(0, samples.length - 1),
+    rate,
+    f0
+  );
+  for (let t = 0; t < pitch.f0.length; t++) {
+    pitch.f0[t] = t % 17 === 0 ? 0 : f0 + (t % 8) * 4;
+  }
+  const full = inverseFilter(frames, { pitch });
+  expect(full.lowBand).toBe(true);
+  expect(inverseModeMeasures(frames, { pitch })).toEqual({
+    h1h2Source: full.h1h2Source,
+    hnr: full.hnr,
+    cpp: full.cpp,
+  });
+});
+
+it('keeps source windows separate across a nested trace', () => {
+  const outer = vowel();
+  const inner = vowel(0.65, 140, 8000);
+  let nested;
+  const result = inverseFilter(outer.frames, {
+    pitch: outer.pitch,
+    trace(event) {
+      if (event.stage === 'stationary-refinement' && !nested) {
+        nested = inverseFilter(inner.frames, { pitch: inner.pitch });
+      }
+    },
+  });
+  expect(nested).toEqual(inner.result);
+  expect(result).toEqual(outer.result);
+});
+
+describe('batch glottal inverse filter', () => {
+  it('keeps the source measures used by mode recognition', () => {
+    for (const rate of [8000, 16000]) {
+      const { frames, pitch, result } = vowel(0.5, 110, rate);
+      const measures = inverseModeMeasures(frames, { pitch });
+      expect(measures).toEqual({
+        h1h2Source: result.h1h2Source,
+        hnr: result.hnr,
+        cpp: result.cpp,
+      });
+      const rows = [4, 20, frames.count - 1];
+      const selected = inverseModeMeasures(frames, { pitch }, rows);
+      for (const key of ['h1h2Source', 'hnr', 'cpp']) {
+        expect(rows.map((row) => selected[key][row])).toEqual(
+          rows.map((row) => result[key][row])
+        );
+        expect(Number.isNaN(selected[key][0])).toBe(true);
+      }
     }
   });
 
@@ -74,7 +145,7 @@ describe('batch glottal inverse filter', () => {
       const rows = Array.from({ length: frames.count }, (_, t) => t).filter(
         (t) => t % 3 === 1
       );
-      const cues = inverseFilterModeCues(frames, rows, options);
+      const cues = inverseModeMeasures(frames, options, rows);
       for (const key of ['h1h2Source', 'hnr', 'cpp']) {
         expect(Array.from(cues[key])).toEqual(
           Array.from(full[key], (value, t) => (t % 3 === 1 ? value : NaN))

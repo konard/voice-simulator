@@ -87,7 +87,7 @@ export function encodeAu(samples, sampleRate, options = {}) {
  * @param {Uint8Array} bytes
  * @returns {{sampleRate: number, samples: Float32Array, channels: number, bitDepth: number, float: boolean}}
  */
-export function decodeAu(bytes) {
+export function decodeAu(bytes, _maxSeconds, allocate) {
   if (readTag(bytes, 0) !== '.snd') {
     throw new Error('Not an AU file');
   }
@@ -105,7 +105,7 @@ export function decodeAu(bytes) {
   const format = { ...encoding, little: false };
   return {
     sampleRate: view.getUint32(16),
-    samples: decodeSamples(bytes, start, length, channels, format),
+    samples: decodeSamples(bytes, start, length, channels, format, allocate),
     channels,
     bitDepth: encoding.bitDepth,
     float: encoding.kind === 'float',

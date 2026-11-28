@@ -30,6 +30,10 @@ const vendorChunks = [
     /[\\/]src[\\/]recognition[\\/](fft|lpc|pitch|pitch-rust|inverse-dsp|wasm-memory)\.js$/,
     'recognition-dsp',
   ],
+  [
+    /[\\/]src[\\/]recognition[\\/]hmm-(archive|frame|frontier)\.js$/,
+    'recognition-hmm-kernels',
+  ],
   [/[\\/]src[\\/]recognition[\\/]/, 'recognition'],
   [/[\\/]src[\\/]acoustics[\\/]/, 'acoustics'],
 ];
@@ -43,13 +47,13 @@ export function vendorChunk(id) {
   if (counts) {
     return `recognition-${counts[1]}`;
   }
-  // The packed recognition HMM is split into parts of under 400 kB by
-  // scripts/build-hmm-model.mjs; each part is its own chunk.
+  // Ship the model metadata, tone table, and packed coefficient parts in
+  // separate chunks. The generator keeps each coefficient part under 400 kB.
   const model = id.match(
-    /[\\/]src[\\/]recognition[\\/]data[\\/]hmm-model-(\d+)\.js$/
+    /[\\/]src[\\/]recognition[\\/]data[\\/]hmm-(?:model(?:-(\d+))?|(tone))\.js$/
   );
   if (model) {
-    return `recognition-hmm-${model[1]}`;
+    return `recognition-hmm-${model[1] ?? model[2] ?? 'metadata'}`;
   }
   return vendorChunks.find(([pattern]) => pattern.test(id))?.[1];
 }

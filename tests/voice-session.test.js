@@ -10,6 +10,8 @@ import {
   synthesize,
 } from '../src/index.js';
 import { createSession } from '../src/session/voice-session.js';
+import { createRecordingWindow } from '../src/session/audio-window.js';
+import { sessionPasses } from '../src/session/passes.js';
 import { emptyRecognition } from '../src/recognition/recognizer.js';
 import { createEvents } from '../src/recognition/recognizer-stream.js';
 import {
@@ -123,6 +125,22 @@ function consume(work) {
 
 describe('voice session', () => {
   let first;
+  it('keeps one-shot audio snapshots valid after subsequent pushes and a speaker change', () => {
+    const window = createRecordingWindow(8);
+    window.push(Float32Array.of(1, 2, 3, 4));
+    const prefix = window.read();
+    const range = window.read(2, 3);
+    window.push(Float32Array.of(5, 6));
+    expect(window.end).toBe(6);
+    expect(window.read().buffer).toBe(prefix.buffer);
+    window.clear();
+    expect(window.end).toBe(0);
+    window.push(Float32Array.of(7, 8));
+    expect(window.read()).toEqual(Float32Array.of(7, 8));
+    expect(prefix).toEqual(Float32Array.of(1, 2, 3, 4));
+    expect(range).toEqual(Float32Array.of(2, 3));
+  });
+
   it('walks through the states in order with a confident reading', () => {
     first = collect(4096);
     const states = first.events
@@ -307,4 +325,80 @@ describe('voice session reductions', () => {
       ).toEqual(changed.map(() => true));
     }
   });
+});
+
+it('reuses fit statistics only for the same immutable session snapshot', () => {
+  let inverseFilters = 0;
+  const settings = {
+    ...options,
+    language: 'en',
+    stages: { audioToIpa: () => ({ ipa: '', segments: [] }) },
+    profile(stage) {
+      if (stage === 'Inverse filter') {
+        inverseFilters++;
+      }
+    },
+  };
+  const snapshot = samples.slice(0, 2 * SAMPLE_RATE);
+  const invert = (audio) =>
+    consume(
+      sessionPasses.inverting(audio, { voice, distance: Infinity }, settings)
+    ).distance;
+  const distance = invert(snapshot);
+  expect(Number.isFinite(distance)).toBe(true);
+  expect(invert(snapshot)).toBe(distance);
+  expect(inverseFilters).toBe(1);
+  expect(invert(snapshot.slice())).toBe(distance);
+  expect(inverseFilters).toBe(2);
+});
+
+it('reuses the default word decode for the same session window and options', () => {
+  const settings = { ...options, recognitionEngine: 'js' };
+  const snapshot = samples.slice(0, SAMPLE_RATE);
+  const invert = (audio, currentVoice) =>
+    consume(
+      sessionPasses.inverting(
+        audio,
+        { voice: currentVoice, distance: 1 },
+        settings
+      )
+    ).reading;
+  const first = invert(snapshot, voice);
+  expect(first.decoded.ipa.length > 0).toBe(true);
+  const reused = invert(snapshot, adjusted);
+  expect(reused.decoded === first.decoded).toBe(true);
+  const fresh = invert(snapshot.slice(), adjusted);
+  expect(fresh.decoded === reused.decoded).toBe(false);
+  expect(fresh.words).toEqual(reused.words);
+  settings.oov = false;
+  expect(invert(snapshot, adjusted).decoded === reused.decoded).toBe(false);
+});
+
+it('uses recognized word timing and stress for fitting without mode analysis', () => {
+  const syllable = { text: 'bird', ipa: 'bɝd', start: 0, end: 0.4, stress: 1 };
+  const word = {
+    ...syllable,
+    language: 'en',
+    confidence: 0.9,
+    syllables: [syllable],
+  };
+  const stages = [];
+  const result = consume(
+    sessionPasses.inverting(
+      samples.slice(0, SAMPLE_RATE),
+      { voice, distance: 1 },
+      {
+        ...options,
+        includeModeLabels: true,
+        stages: {
+          audioToIpa: () => reading.decoded,
+          ipaToText: () => ({ text: word.text, ipa: word.ipa, words: [word] }),
+        },
+        profile: (stage) => stages.push(stage),
+      }
+    )
+  );
+  expect(result.usable).toBe(true);
+  expect(result.reading.words[0].syllables).toEqual([syllable]);
+  expect(stages.includes('Modes')).toBe(false);
 });

@@ -324,7 +324,13 @@ export async function analyzeForDecodeParallel(
   return finishAnalysis(analysis, settings.profile, query);
 }
 
-export function prepareIpaDecode(analysis, settings, bounds, templatesForTime) {
+export function prepareIpaDecode(
+  analysis,
+  settings,
+  bounds,
+  templatesForTime,
+  spanPool
+) {
   const { frames, tracks, voice } = analysis;
   const templates = decoderTemplates(
     voice,
@@ -348,7 +354,7 @@ export function prepareIpaDecode(analysis, settings, bounds, templatesForTime) {
       from: frames.startTime,
       to: frames.startTime + frames.sampleCount / frames.rate,
     },
-    { templatesForTime, whisperSpans, whisperScore }
+    { templatesForTime, whisperSpans, whisperScore, spanPool }
   );
   return { templates, prepared };
 }

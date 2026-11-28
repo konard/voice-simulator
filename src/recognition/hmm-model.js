@@ -7,7 +7,7 @@
  * Unlicense.
  */
 import { CONSONANTS, VOWELS } from '../ipa/inventory.js';
-import { HMM_MODEL } from './data/hmm-model.js';
+import { readHmmModel } from './data/hmm-model.js';
 import { HMM_TONE } from './data/hmm-tone.js';
 import { unpackHmmTone } from './hmm-tone.js';
 
@@ -17,41 +17,76 @@ const SEXTETS = new Uint8Array(128);
 for (let i = 0; i < 64; i++) {
   SEXTETS[BASE64.charCodeAt(i)] = i;
 }
+const NodeBuffer =
+  globalThis.process?.getBuiltinModule?.('node:buffer')?.Buffer;
 
-/** Bytes of a padded base64 string, in a fresh (aligned) buffer. */
-function bytes(base64) {
+function byteLength(base64) {
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
-  const out = new Uint8Array((base64.length / 4) * 3 - padding);
-  let o = 0;
-  for (let i = 0; i < base64.length; i += 4) {
+  return (base64.length / 4) * 3 - padding;
+}
+
+function readBytes(base64, out, offset) {
+  const length = byteLength(base64);
+  const triplets = length - (length % 3);
+  const end = offset + length;
+  let i = 0;
+  for (const stop = offset + triplets; offset < stop; i += 4) {
     const n =
       (SEXTETS[base64.charCodeAt(i)] << 18) |
       (SEXTETS[base64.charCodeAt(i + 1)] << 12) |
       (SEXTETS[base64.charCodeAt(i + 2)] << 6) |
       SEXTETS[base64.charCodeAt(i + 3)];
-    out[o++] = n >> 16;
-    if (o < out.length) {
-      out[o++] = (n >> 8) & 255;
+    out[offset++] = n >> 16;
+    out[offset++] = n >> 8;
+    out[offset++] = n;
+  }
+  if (offset < end) {
+    const a = SEXTETS[base64.charCodeAt(i)];
+    const b = SEXTETS[base64.charCodeAt(i + 1)];
+    out[offset++] = (a << 2) | (b >> 4);
+    if (offset < end) {
+      out[offset++] = (b << 4) | (SEXTETS[base64.charCodeAt(i + 2)] >> 2);
     }
-    if (o < out.length) {
-      out[o++] = n & 255;
+  }
+  return offset;
+}
+
+/** Decode one base64 string or independently decodable parts into one buffer. */
+function bytes(encoded) {
+  const parts = typeof encoded === 'string' ? [encoded] : encoded;
+  let length = 0;
+  for (const part of parts) {
+    length += byteLength(part);
+  }
+  const out = new Uint8Array(length);
+  // Node can decode all the model parts straight into their final buffer.
+  const target = NodeBuffer?.from(out.buffer);
+  let offset = 0;
+  for (const part of parts) {
+    if (target) {
+      const size = byteLength(part);
+      if (target.write(part, offset, size, 'base64') === size) {
+        offset += size;
+        continue;
+      }
     }
+    offset = readBytes(part, out, offset);
   }
   return out;
 }
 
 const float32 = (base64) => new Float32Array(bytes(base64).buffer);
 const int8 = (base64) => new Int8Array(bytes(base64).buffer);
+const VALUES_PER_DIMENSION = 256;
 
-/** Unpack quantised mixtures into flat arrays for scoring. */
+/** Keep mixture codes and expand each distinct value only once per dimension. */
 export function unpackHmmModel(data) {
   const { lda, units, contexts, durations, mixtures } = data;
-  const contextUnits = contexts.map((key) => units.indexOf(key.split('#')[0]));
   const dims = lda.dims;
   const counts = bytes(mixtures.counts);
   const weights = int8(mixtures.weights);
-  const means = int8(mixtures.means);
-  const logVars = int8(mixtures.logVars);
+  const meanCodes = bytes(mixtures.means);
+  const varCodes = bytes(mixtures.logVars);
   const [meanScale, meanOffset, varScale, varOffset] = [
     mixtures.meanScale,
     mixtures.meanOffset,
@@ -59,17 +94,25 @@ export function unpackHmmModel(data) {
     mixtures.varOffset,
   ].map(float32);
   const total = weights.length;
-  const mu = new Float32Array(total * dims);
-  const inv = new Float32Array(total * dims);
+  const muTable = new Float32Array(dims * VALUES_PER_DIMENSION);
+  const invTable = new Float32Array(muTable.length);
+  const normalizers = new Float64Array(muTable.length);
+  const gaussian = Math.log(2 * Math.PI);
+  for (let d = 0; d < dims; d++) {
+    for (let code = 0; code < VALUES_PER_DIMENSION; code++) {
+      const signed = code < 128 ? code : code - VALUES_PER_DIMENSION;
+      const k = d * VALUES_PER_DIMENSION + code;
+      muTable[k] = meanOffset[d] + meanScale[d] * signed;
+      const logVar = varOffset[d] + varScale[d] * signed;
+      invTable[k] = 0.5 * Math.exp(-logVar);
+      normalizers[k] = 0.5 * (gaussian + logVar);
+    }
+  }
   const norm = new Float64Array(total);
   for (let c = 0; c < total; c++) {
     let sum = (weights[c] / 127) * mixtures.weightRange;
     for (let d = 0; d < dims; d++) {
-      const i = c * dims + d;
-      mu[i] = meanOffset[d] + meanScale[d] * means[i];
-      const logVar = varOffset[d] + varScale[d] * logVars[i];
-      inv[i] = 0.5 * Math.exp(-logVar);
-      sum -= 0.5 * (Math.log(2 * Math.PI) + logVar);
+      sum -= normalizers[d * VALUES_PER_DIMENSION + varCodes[c * dims + d]];
     }
     norm[c] = sum;
   }
@@ -78,24 +121,37 @@ export function unpackHmmModel(data) {
     first[i + 1] = first[i] + n;
   });
   const ciIndex = new Map();
+  const unitIndex = new Map();
+  const stayByUnit = new Float64Array(units.length);
+  const goByUnit = new Float64Array(units.length);
   units.forEach((unit, u) => {
+    if (!unitIndex.has(unit)) {
+      unitIndex.set(unit, u);
+    }
+    // Mean phone durations in frames give the left-to-right transitions.
+    stayByUnit[u] = Math.log(1 - 3 / durations[u]);
+    goByUnit[u] = Math.log(3 / durations[u]);
     for (let s = 0; s < 3; s++) {
       ciIndex.set(`${unit}#${s}`, 3 * u + s);
     }
   });
-  const contextIndex = new Map(
-    contexts.map((key, i) => [key, 3 * units.length + i])
-  );
-  const stateUnit = Int32Array.from({ length: counts.length }, (_, i) =>
-    i < 3 * units.length
-      ? Math.floor(i / 3)
-      : contextUnits[i - 3 * units.length]
-  );
-  // Mean phone durations in frames give the left-to-right transitions.
-  const stay = Float64Array.from(stateUnit, (u) =>
-    Math.log(1 - 3 / durations[u])
-  );
-  const go = Float64Array.from(stateUnit, (u) => Math.log(3 / durations[u]));
+  const contextIndex = new Map();
+  const stay = new Float64Array(counts.length);
+  const go = new Float64Array(counts.length);
+  const ciCount = 3 * units.length;
+  for (let i = 0; i < ciCount; i++) {
+    const u = Math.floor(i / 3);
+    stay[i] = stayByUnit[u];
+    go[i] = goByUnit[u];
+  }
+  contexts.forEach((key, i) => {
+    const state = ciCount + i;
+    const separator = key.indexOf('#');
+    const u = unitIndex.get(separator < 0 ? key : key.slice(0, separator));
+    contextIndex.set(key, state);
+    stay[state] = stayByUnit[u];
+    go[state] = goByUnit[u];
+  });
   return {
     lda: {
       ...lda,
@@ -112,8 +168,7 @@ export function unpackHmmModel(data) {
     ),
     states: counts.length,
     first,
-    mu,
-    inv,
+    parameters: { meanCodes, varCodes, muTable, invTable },
     norm,
     stay,
     go,
@@ -122,27 +177,57 @@ export function unpackHmmModel(data) {
   };
 }
 
+/** Expand mixtures directly into the caller's buffers, such as linear memory. */
+export function writeGaussianParameters(model, mu, inv) {
+  const { dims, parameters } = model;
+  if (!parameters) {
+    mu.set(model.mu);
+    inv.set(model.inv);
+    return;
+  }
+  const { meanCodes, varCodes, muTable, invTable } = parameters;
+  for (let base = 0; base < meanCodes.length; base += dims) {
+    for (let d = 0; d < dims; d++) {
+      const i = base + d;
+      const k = d * VALUES_PER_DIMENSION;
+      mu[i] = muTable[k + meanCodes[i]];
+      inv[i] = invTable[k + varCodes[i]];
+    }
+  }
+}
+
 let model;
 /** The shipped model, unpacked on first use. */
 export function getHmmModel() {
   if (!model) {
-    model = unpackHmmModel(HMM_MODEL);
+    model = unpackHmmModel(readHmmModel());
     model.tone = unpackHmmTone(HMM_TONE, model.units, model.contextIndex);
   }
   return model;
 }
 
-/** Log likelihood of frame x (offset in feats) for state m. */
-export function stateScore(m, feats, offset, model) {
-  const { first, mu, inv, norm, dims } = model;
+/** Log likelihood of a frame for state m, optionally written to scores[m]. */
+export function stateScore(m, feats, offset, model, scores) {
+  const { first, norm, dims, parameters } = model;
   let max = -Infinity;
   let sum = 0;
   for (let c = first[m]; c < first[m + 1]; c++) {
     let s = norm[c];
     const base = c * dims;
-    for (let d = 0; d < dims; d++) {
-      const e = feats[offset + d] - mu[base + d];
-      s -= e * e * inv[base + d];
+    if (parameters) {
+      const { meanCodes, varCodes, muTable, invTable } = parameters;
+      for (let d = 0; d < dims; d++) {
+        const i = base + d;
+        const k = d * VALUES_PER_DIMENSION;
+        const e = feats[offset + d] - muTable[k + meanCodes[i]];
+        s -= e * e * invTable[k + varCodes[i]];
+      }
+    } else {
+      const { mu, inv } = model;
+      for (let d = 0; d < dims; d++) {
+        const e = feats[offset + d] - mu[base + d];
+        s -= e * e * inv[base + d];
+      }
     }
     if (s > max) {
       sum = sum * Math.exp(max - s) + 1;
@@ -151,7 +236,12 @@ export function stateScore(m, feats, offset, model) {
       sum += Math.exp(s - max);
     }
   }
-  return max + Math.log(sum);
+  const score = max + Math.log(sum);
+  if (scores) {
+    scores[m] = score;
+  } else {
+    return score;
+  }
 }
 
 const PLACE = {
@@ -220,8 +310,8 @@ export function contextKey(unit, s, left, right) {
  * state, else the context-independent one.
  */
 export function stateIndex(model, unit, s, left, right) {
-  // The entry state reads only the left phone, the exit only the right.
-  // Avoid caching a separate state index for every pair of neighbors.
+  // An entry state depends only on the left phone; an exit state only
+  // on the right phone. The middle state has no context variants.
   let byUnit = stateCaches.get(model);
   if (!byUnit) {
     byUnit = new Map();
@@ -232,19 +322,18 @@ export function stateIndex(model, unit, s, left, right) {
     byState = [new Map(), new Map(), new Map()];
     byUnit.set(unit, byState);
   }
-  const context = s === 0 ? left : s === 2 ? right : null;
-  const neighbor = context ?? null;
+  const context = (s === 0 ? left : s === 2 ? right : null) ?? null;
   const states = byState[s];
-  let index = states.get(neighbor);
-  if (index === undefined && !states.has(neighbor)) {
+  let index = states.get(context);
+  if (index === undefined && !states.has(context)) {
     index = findState(
       model,
       unit,
       s,
-      s === 0 ? neighbor : null,
-      s === 2 ? neighbor : null
+      s === 0 ? context : null,
+      s === 2 ? context : null
     );
-    states.set(neighbor, index);
+    states.set(context, index);
   }
   return index;
 }

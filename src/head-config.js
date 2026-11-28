@@ -132,12 +132,12 @@ function clamp(value, min, max) {
  * @returns {Record<string, number>}
  */
 export function normalizeHeadConfig(config = {}) {
-  const result = {};
+  const result = { ...DEFAULT_HEAD };
   for (const parameter of HEAD_PARAMETERS) {
     const raw = Number(config[parameter.key]);
-    result[parameter.key] = Number.isFinite(raw)
-      ? clamp(raw, parameter.min, parameter.max)
-      : parameter.default;
+    if (Number.isFinite(raw)) {
+      result[parameter.key] = clamp(raw, parameter.min, parameter.max);
+    }
   }
   return result;
 }

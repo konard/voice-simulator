@@ -1,10 +1,13 @@
 /** Pass generators operating on an immutable audio snapshot. Unlicense. */
 import { fitVoiceSteps } from '../analysis/voice-fit.js';
 import { NoVoicedSpeechError } from '../analysis/voice-fit-statistics.js';
+import { lexiconRevision } from '../g2p/lexicon.js';
+import { withFrameStorage } from '../recognition/frame-storage.js';
 import {
   decodeRecognitionAudio,
   recognitionSettings,
   recognizeDecoded,
+  usesWordDecoder,
 } from '../recognition/recognizer.js';
 import {
   controlledRefit,
@@ -21,20 +24,75 @@ function fitOptions(samples, settings) {
     engine: settings.engine ?? 'js',
     preset: settings.preset,
     maxDuration: samples.length / settings.sampleRate,
+    profile: settings.profile,
   };
+}
+
+const snapshotDecodes = new WeakMap();
+
+function decodeWindow(samples, settings, options, level) {
+  const { sampleRate } = settings;
+  // The built-in word decoder is independent of the fitted voice. Keep its
+  // result for the lifetime of the immutable window, while still measuring
+  // each candidate's word prosody. Custom stages and profiling observe every
+  // decode.
+  if (
+    !usesWordDecoder(options) ||
+    settings.stages !== undefined ||
+    options.profile ||
+    Array.isArray(options.whisper)
+  ) {
+    return decodeRecognitionAudio(samples, sampleRate, options, level);
+  }
+  const key = [
+    sampleRate,
+    level,
+    options.modes,
+    options.whisper,
+    options.oov,
+    lexiconRevision(),
+    ...options.languages,
+  ];
+  const last = snapshotDecodes.get(samples);
+  if (
+    last?.settings === settings &&
+    last.key.length === key.length &&
+    last.key.every((value, i) => value === key[i])
+  ) {
+    return last.result;
+  }
+  const result = withFrameStorage((frameStorage) => {
+    const { decoded, input, rate } = decodeRecognitionAudio(
+      samples,
+      sampleRate,
+      options,
+      level,
+      undefined,
+      { frameStorage }
+    );
+    // The session uses the HMM timing and pitch. Its frame energies are only
+    // needed by batch recognition's noise check, so the columns can be reused.
+    decoded.frames = undefined;
+    return { decoded, input, rate };
+  });
+  snapshotDecodes.set(samples, { key, settings, result });
+  return result;
 }
 
 function read(samples, voice, settings) {
   const options = recognitionSettings({
     ...settings,
     engine: settings.recognitionEngine,
+    // Fitting consumes the decoded phones and word timing/stress. The
+    // streaming recognizer supplies mode labels to session listeners.
+    includeModeLabels: false,
     voice: voice.head,
     articulationOffsets: voice.articulationOffsets,
   });
   const level = settings.level === 'auto' ? 'medium' : settings.level;
-  const { decoded, input, rate } = decodeRecognitionAudio(
+  const { decoded, input, rate } = decodeWindow(
     samples,
-    settings.sampleRate,
+    settings,
     options,
     level
   );
@@ -48,17 +106,36 @@ function withWords({ decoded, input, rate, options, level }) {
   };
 }
 
+const snapshotStatistics = new WeakMap();
+
+function fittedSnapshots(settings) {
+  let snapshots = snapshotStatistics.get(settings);
+  if (!snapshots) {
+    snapshots = new WeakMap();
+    snapshotStatistics.set(settings, snapshots);
+  }
+  return snapshots;
+}
+
 function* statistics(samples, settings) {
+  // Refinement can run several times on the same immutable window. Its
+  // acoustic statistics depend on the samples and settings, not the voice.
+  const snapshots = fittedSnapshots(settings);
+  if (snapshots.has(samples)) {
+    return snapshots.get(samples);
+  }
   try {
     const { state } = yield* fitVoiceSteps(samples, settings.sampleRate, {
       ...fitOptions(samples, settings),
       refine: false,
     });
+    snapshots.set(samples, state);
     return state;
   } catch (error) {
     if (!(error instanceof NoVoicedSpeechError)) {
       throw error;
     }
+    snapshots.set(samples, null);
     return null;
   }
 }
@@ -75,6 +152,7 @@ export const sessionPasses = {
     } catch (error) {
       return { failed: true, error };
     }
+    fittedSnapshots(settings).set(samples, fit.state);
     return {
       voice: { head: fit.head, preset: fit.preset },
       distance: fit.distance,

@@ -46,12 +46,12 @@ export function encodeRaw(samples, _sampleRate, options = {}) {
  * @param {Uint8Array} bytes
  * @param {{sampleRate?: number, channels?: number, bitDepth?: number, float?: boolean}} [options]
  */
-export function decodeRaw(bytes, options = {}) {
+export function decodeRaw(bytes, options = {}, allocate) {
   const format = rawSampleFormat(options);
   const channels = options.channels ?? 1;
   return {
     sampleRate: options.sampleRate ?? 0,
-    samples: decodeSamples(bytes, 0, bytes.length, channels, format),
+    samples: decodeSamples(bytes, 0, bytes.length, channels, format, allocate),
     channels,
     bitDepth: format.bitDepth,
     float: format.kind === 'float',
@@ -225,6 +225,11 @@ export function encodeAudio(samples, sampleRate, options = {}) {
  * @returns {{format: string, sampleRate: number, samples: Float32Array, channels: number, bitDepth: number, float: boolean}}
  */
 export function decodeAudio(input, options = {}) {
+  return decodeAudioWithStorage(input, options);
+}
+
+/** The allocator supplies exactly the requested number of mono samples. */
+export function decodeAudioWithStorage(input, options, allocate) {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   const detected = detectAudioFormat(bytes);
   const name =
@@ -236,8 +241,8 @@ export function decodeAudio(input, options = {}) {
   }
   const decoded =
     name === 'raw'
-      ? decodeRaw(bytes, options)
-      : AUDIO_FORMATS[name].decode(bytes, options.maxSeconds);
+      ? decodeRaw(bytes, options, allocate)
+      : AUDIO_FORMATS[name].decode(bytes, options.maxSeconds, allocate);
   checkAudioDuration(
     decoded.samples.length,
     decoded.sampleRate,

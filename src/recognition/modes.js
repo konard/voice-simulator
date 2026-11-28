@@ -1,4 +1,5 @@
 /** Recognize manner of speech after the text step (issue 71). Unlicense. */
+import { samplesAreFinite } from '../audio/sample-validation.js';
 import { parseIpa, formatIpa } from '../ipa/parse.js';
 import { createMode, composeMode, MODE_FIELDS } from '../markup/modes.js';
 import {
@@ -11,6 +12,7 @@ import {
 import {
   measureWords,
   summarize,
+  phrasePitchSpan,
   phraseSummary,
   relativeF1,
   quantile,
@@ -110,10 +112,8 @@ function validate(samples, sampleRate, result, options) {
   ) {
     throw new RangeError('mode recognition exceeds maxSeconds (default 30)');
   }
-  for (let i = 0; i < samples.length; i++) {
-    if (!Number.isFinite(samples[i])) {
-      throw new TypeError('samples must be finite');
-    }
+  if (!samplesAreFinite(samples)) {
+    throw new TypeError('samples must be finite');
   }
   if (!Array.isArray(result?.words)) {
     throw new TypeError('mode recognition needs timed result.words');
@@ -136,33 +136,37 @@ function validate(samples, sampleRate, result, options) {
   }
 }
 
-function writeIpa(words, spans, sourceIpa) {
+function modeTokens(words, sourceIpa) {
+  if (sourceIpa) {
+    const original = parseIpa(sourceIpa).tokens;
+    let last = -1;
+    for (const token of original) {
+      if (token.kind !== 'pause' && token.kind !== 'sound') {
+        last = Math.max(last, token.word ?? -1);
+      }
+    }
+    if (last + 1 === words.length) {
+      return original;
+    }
+  }
   // Recognition words can contain more than one IPA word (normalization).
   const tokens = [];
-  words.forEach((word, i) => {
+  for (let i = 0; i < words.length; i++) {
     if (i) {
       tokens.push({ kind: 'pause', symbol: ' ', strength: 0 });
     }
-    tokens.push(
-      ...parseIpa(word.ipa).tokens.map((t) =>
-        t.kind === 'pause' ? t : { ...t, word: i }
-      )
-    );
-  });
-  if (sourceIpa) {
-    const original = parseIpa(sourceIpa).tokens;
-    const count =
-      1 +
-      Math.max(
-        -1,
-        ...original
-          .filter((t) => t.kind !== 'pause' && t.kind !== 'sound')
-          .map((t) => t.word ?? -1)
-      );
-    if (count === words.length) {
-      tokens.splice(0, tokens.length, ...original);
+    for (const token of parseIpa(words[i].ipa).tokens) {
+      if (token.kind !== 'pause') {
+        token.word = i;
+      }
+      tokens.push(token);
     }
   }
+  return tokens;
+}
+
+function writeIpa(words, spans, sourceIpa) {
+  const tokens = modeTokens(words, sourceIpa);
   const labelled = spans.filter((s) => s.notation && !s.sound);
   const ipa = formatIpa(
     tokens,
@@ -377,11 +381,16 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     result,
     reference?.head,
     options.wordFrames ?? options.frames,
-    { ...options, skipFormants: !reference && !options.trace }
+    {
+      ...options,
+      // F1 is interpreted relative to the known voice. Keep it available
+      // to callers inspecting the underlying features through the trace.
+      skipFormants: options.skipFormants || (!reference && !options.trace),
+    }
   );
   const base = reference?.features ?? {
     ...summarize(features),
-    pitchSpan: phraseSummary(features).pitchSpan,
+    pitchSpan: phrasePitchSpan(features),
   };
   features.forEach((w) => {
     w.f1 = reference ? relativeF1(w, reference.vowels) : null;
@@ -417,12 +426,7 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
   let spans = reference
     ? effortRamps(result.words, labels, initialSpans)
     : initialSpans;
-  const references = reference
-    ? [
-        ...emotionReferences(reference, options.trace),
-        ...physicalReferences(reference),
-      ]
-    : [];
+  let references;
   for (const group of groups) {
     const heard = features.slice(group.from, group.to);
     const summary = phraseSummary(
@@ -436,12 +440,17 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
       Math.abs(summary.pitchSpan - base.pitchSpan) < 1 &&
       summary.rate / base.rate > 0.8 &&
       summary.rate / base.rate < 1.2;
-    const found = classifyEmotion(
-      vector,
-      heard.reduce((n, w) => n + w.vowels, 0) >= 3 && !simpleEffort
-        ? references
-        : []
-    );
+    const useReferences =
+      reference &&
+      !simpleEffort &&
+      heard.reduce((n, w) => n + w.vowels, 0) >= 3;
+    if (useReferences) {
+      references ??= [
+        ...emotionReferences(reference, options.trace),
+        ...physicalReferences(reference),
+      ];
+    }
+    const found = classifyEmotion(vector, useReferences ? references : []);
     if (found) {
       const span = {
         ...group,

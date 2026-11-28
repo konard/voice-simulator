@@ -27,22 +27,23 @@ function timedSound(sound, previousStart) {
   return parseIpa(sound.ipa);
 }
 
-function measuredFeatures(token, chunk) {
-  const features = {};
+function attachMeasurements(token, chunk) {
+  token.start = chunk.start;
+  token.end = chunk.end;
+  token.confidence = chunk.confidence;
   if (chunk.whispered) {
-    features.whispered = true;
-    features.voicing = chunk.voicing;
+    token.whispered = true;
+    token.voicing = chunk.voicing;
   }
   if (token.kind !== 'vowel') {
-    return features;
+    return;
   }
   if (Object.hasOwn(chunk, 'tones')) {
-    features.tones = chunk.tones;
+    token.tones = chunk.tones;
   }
   if (Number.isFinite(chunk.prominence)) {
-    features.prominence = chunk.prominence;
+    token.prominence = chunk.prominence;
   }
-  return features;
 }
 
 export function recognitionInput(ipa, boundaries) {
@@ -76,14 +77,9 @@ export function recognitionInput(ipa, boundaries) {
         if (token.strength > 0 || token.seconds !== undefined) {
           hard.add(tokens.length);
         }
-      } else if (['vowel', 'consonant'].includes(token.kind)) {
-        tokens.push({
-          ...token,
-          start: chunk.start,
-          end: chunk.end,
-          confidence: chunk.confidence,
-          ...measuredFeatures(token, chunk),
-        });
+      } else if (token.kind === 'vowel' || token.kind === 'consonant') {
+        attachMeasurements(token, chunk);
+        tokens.push(token);
       } else {
         throw new TypeError('IPA-to-text accepts speech sounds and pauses');
       }

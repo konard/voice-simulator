@@ -14,6 +14,7 @@ import {
   synthesize,
 } from '../src/index.js';
 import { SPEED_OF_SOUND } from '../src/acoustics/transfer.js';
+import { synthesizeWithStorage } from '../src/synthesize.js';
 import { noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 
@@ -36,6 +37,40 @@ const untouchable = {
 };
 
 describe('engines', () => {
+  it('preserves waveguide samples with buffered offline solver inputs', async () => {
+    const engine = await createEngine({ engine: 'js' });
+    const text = 'Stop here. [whisper]Speak softly.[/whisper]';
+    for (const tier of ['telephone', 'wideband']) {
+      const options = { tier, seed: 1 };
+      const expected = synthesize(text, { ...options, engine }).samples;
+      const offline = synthesize(text, { ...options, engine: 'js' }).samples;
+      expect(offline).toEqual(expected);
+    }
+  });
+
+  for (const name of ['js', 'rust']) {
+    itUnless(name === 'rust' && noRust)(
+      `${name} reuses synthesis output without changing the waveform`,
+      async () => {
+        const engine = await createEngine({ engine: name, threads: 1 });
+        const options = { engine, tier: 'telephone', seed: 1 };
+        const expected = synthesize('Some short words.', options).samples;
+        const storage = new Float32Array(expected.length + 4).fill(NaN);
+        const allocate = (length) => storage.subarray(2, 2 + length);
+        const reused = synthesizeWithStorage(
+          'Some short words.',
+          options,
+          allocate
+        ).samples;
+        expect(reused.buffer).toBe(storage.buffer);
+        expect(reused).toEqual(expected);
+        const shorter = synthesizeWithStorage('Hi.', options, allocate).samples;
+        expect(shorter).toEqual(synthesize('Hi.', options).samples);
+        expect(expected.buffer).not.toBe(storage.buffer);
+      }
+    );
+  }
+
   it('js never loads WebAssembly', async () => {
     const engine = await createEngine({ engine: 'js', source: untouchable });
     expect(engine.name).toBe('js');

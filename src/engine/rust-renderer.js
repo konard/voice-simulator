@@ -16,12 +16,16 @@ import { buildSheet, sheetColumn } from '../acoustics/sheet-model.js';
 import { sideBranches } from '../acoustics/sinuses.js';
 import { hashSeed } from '../random.js';
 import { normalizeHeadConfig } from '../head-config.js';
-import { noseShape } from '../articulation/tract-shape.js';
+import {
+  createTractWorkspace,
+  noseShape,
+} from '../articulation/tract-shape.js';
 import {
   blockShape,
   DEFAULT_SOURCE,
   levelFactor,
   noseSections,
+  renderSamples,
   STEADY_TRACT,
 } from '../acoustics/voice.js';
 import { piriformBranch } from '../acoustics/waveguide.js';
@@ -341,6 +345,8 @@ function packedGeometry(head, options, solver, packModel) {
  * shapes. Needs no engine, so a job can be written for the CLI.
  */
 export class FramePlanner {
+  #tract;
+
   /**
    * @param {object} plan Result of planUtterance.
    * @param {object} [options] as for RustVoiceRenderer
@@ -357,6 +363,10 @@ export class FramePlanner {
     options = headListening(this.head, options);
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
+    this.#tract = createTractWorkspace({
+      sections: this.sections,
+      reuseAreas: true,
+    });
     this.blockSize = options.blockSize ?? 32;
     this.teeth = options.teeth !== false;
     this.stride = frameStride(this.sections);
@@ -442,7 +452,8 @@ export class FramePlanner {
             this.time,
             this.state,
             this.head,
-            this.shapeOptions
+            this.shapeOptions,
+            this.#tract
           );
         if (this.plan[STEADY_TRACT]) {
           this.steadyShape = shape;
@@ -774,9 +785,7 @@ class FrameList {
 export function renderPlanRust(module, plan, options = {}) {
   const renderer = new RustVoiceRenderer(module, plan, options);
   try {
-    const samples = new Float32Array(renderer.totalSamples);
-    renderer.render(samples);
-    return samples;
+    return renderSamples(renderer);
   } finally {
     renderer.free();
   }

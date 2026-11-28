@@ -1,11 +1,16 @@
 /** Class B parity of the Gaussian HMM kernels of the word decoder (issue 75). */
-import { describe, expect } from 'test-anywhere';
+import { describe, expect, it as test } from 'test-anywhere';
 import {
   applyLda,
   hmmFeatures,
   hmmStatics,
 } from '../src/recognition/hmm-features.js';
-import { getHmmModel, stateScore } from '../src/recognition/hmm-model.js';
+import { readHmmModel } from '../src/recognition/data/hmm-model.js';
+import {
+  getHmmModel,
+  stateScore,
+  writeGaussianParameters,
+} from '../src/recognition/hmm-model.js';
 import {
   hmmLdaRust,
   hmmStateScoresRust,
@@ -17,6 +22,51 @@ import { itUnless } from './helpers/skip.js';
 
 const it = itUnless(noRust);
 const RATE = 8000;
+
+test('packed mixtures preserve every original Gaussian parameter', () => {
+  const model = getHmmModel();
+  const { mixtures } = readHmmModel();
+  const decode = (encoded) => {
+    const decoded = globalThis.atob(
+      typeof encoded === 'string' ? encoded : encoded.join('')
+    );
+    const bytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = decoded.charCodeAt(i);
+    }
+    return bytes;
+  };
+  const [means, logVars, weights] = [
+    mixtures.means,
+    mixtures.logVars,
+    mixtures.weights,
+  ].map((encoded) => new Int8Array(decode(encoded).buffer));
+  const [meanScale, meanOffset, varScale, varOffset] = [
+    mixtures.meanScale,
+    mixtures.meanOffset,
+    mixtures.varScale,
+    mixtures.varOffset,
+  ].map((encoded) => new Float32Array(decode(encoded).buffer));
+  const mu = new Float32Array(means.length);
+  const inv = new Float32Array(means.length);
+  writeGaussianParameters(model, mu, inv);
+  let exact = true;
+  for (let c = 0; c < weights.length; c++) {
+    let norm = (weights[c] / 127) * mixtures.weightRange;
+    for (let d = 0; d < model.dims; d++) {
+      const i = c * model.dims + d;
+      const logVar = varOffset[d] + varScale[d] * logVars[i];
+      exact &&= Object.is(
+        mu[i],
+        Math.fround(meanOffset[d] + meanScale[d] * means[i])
+      );
+      exact &&= Object.is(inv[i], Math.fround(0.5 * Math.exp(-logVar)));
+      norm -= 0.5 * (Math.log(2 * Math.PI) + logVar);
+    }
+    exact &&= Object.is(model.norm[c], norm);
+  }
+  expect(exact).toBe(true);
+});
 
 /** Half a second of a gliding two-formant buzz with a quiet seeded hiss. */
 function sound() {
@@ -34,6 +84,87 @@ function sound() {
   }
   return x;
 }
+
+test('packed HMM features match the training feature rows', () => {
+  const { lda } = getHmmModel();
+  const samples = sound();
+  const { statics, pitch } = hmmStatics(samples);
+  const lf0 = statics.map((row) => row[13] / 4);
+  const voicing = statics.map((row) => row[14]);
+  const packed = hmmFeatures(samples, RATE, lda, pitch);
+  const spectralOnly = hmmFeatures(samples, RATE, lda, pitch, {
+    includeTone: false,
+  });
+
+  expect(packed.frames).toBe(statics.length);
+  expect(packed.feats).toEqual(applyLda(lda, statics));
+  expect(packed.tone).toEqual(hmmToneFeatures(lf0, voicing));
+  expect(spectralOnly.feats).toEqual(packed.feats);
+  expect(spectralOnly.tone).toBeUndefined();
+});
+
+test('wideband HMM features only need frame-level pitch after resampling', () => {
+  const { lda } = getHmmModel();
+  const native = sound();
+  const wideband = Float32Array.from(
+    { length: native.length * 2 },
+    (_, i) => native[i >> 1]
+  );
+  const full = hmmFeatures(wideband, RATE * 2, lda);
+  const frameOnly = hmmFeatures(wideband, RATE * 2, lda, undefined, {
+    framePitch: true,
+  });
+
+  expect(frameOnly.frames).toBe(full.frames);
+  expect(frameOnly.feats).toEqual(full.feats);
+  expect(frameOnly.tone).toEqual(full.tone);
+});
+
+test('reused wideband HMM input ignores the previous clip’s tail', () => {
+  const { lda } = getHmmModel();
+  const samples = sound();
+  const modelAudio = new Float32Array(samples.length / 2);
+  const storage = (key, length, Type) =>
+    key === 'hmmAudio' ? modelAudio.subarray(0, length) : new Type(length);
+  const options = { framePitch: true };
+  hmmFeatures(samples, RATE * 2, lda, undefined, { ...options, storage });
+  expect(modelAudio.some((sample) => sample !== 0)).toBe(true);
+
+  const short = samples.subarray(300, 2400);
+  const expected = hmmFeatures(short, RATE * 2, lda, undefined, options);
+  const reused = hmmFeatures(short, RATE * 2, lda, undefined, {
+    ...options,
+    storage,
+  });
+  expect(reused.frames).toBe(expected.frames);
+  expect(reused.feats).toEqual(expected.feats);
+  expect(reused.tone).toEqual(expected.tone);
+});
+
+test('reuses HMM feature storage across inputs with different lengths', () => {
+  const { lda } = getHmmModel();
+  const samples = sound();
+  const buffers = new Map();
+  const storage = (key, length, Type) => {
+    if (!buffers.has(key)) {
+      buffers.set(key, new Type(length));
+    }
+    return buffers.get(key).subarray(0, length);
+  };
+  hmmFeatures(samples, RATE, lda, undefined, { framePitch: true, storage });
+  const short = samples.subarray(1000, 6000);
+  const expected = hmmFeatures(short, RATE, lda, undefined, {
+    framePitch: true,
+  });
+  const reused = hmmFeatures(short, RATE, lda, undefined, {
+    framePitch: true,
+    storage,
+  });
+
+  expect(reused.feats.buffer).toBe(buffers.get('hmmFeatures').buffer);
+  expect(reused.feats).toEqual(expected.feats);
+  expect(reused.tone).toEqual(expected.tone);
+});
 
 describe('Rust HMM kernels (issue 75)', () => {
   it('projects the statics as applyLda does', async () => {

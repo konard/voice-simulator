@@ -65,6 +65,10 @@ const ORDER_STEPS = [0, 2, 4];
 /** Aberth-Ehrlich iteration: rounds, step limit and start values. */
 const ABERTH_ROUNDS = 40;
 const ABERTH_TOLERANCE = 1e-6;
+const ABERTH_TOLERANCE_SQUARED = ABERTH_TOLERANCE * ABERTH_TOLERANCE;
+// Keep the original magnitude comparison within a few ulps of the cutoff.
+const ABERTH_SQUARED_LOW = ABERTH_TOLERANCE_SQUARED * (1 - 4 * Number.EPSILON);
+const ABERTH_SQUARED_HIGH = ABERTH_TOLERANCE_SQUARED * (1 + 4 * Number.EPSILON);
 const START_RADIUS = 0.9;
 const START_PHASE = 0.1;
 /** Candidates: lowest frequency, distance below the Nyquist frequency and
@@ -285,12 +289,13 @@ function aberthRoots(a, m, re, im) {
       if (!Number.isFinite(re[i]) || !Number.isFinite(im[i])) {
         return -1;
       }
-      // Once a step reaches the tolerance, finish the round without
-      // measuring the rest. A single component can also rule it out.
-      converged &&=
-        Math.abs(wr) < ABERTH_TOLERANCE &&
-        Math.abs(wi) < ABERTH_TOLERANCE &&
-        Math.hypot(wr, wi) < ABERTH_TOLERANCE;
+      if (converged) {
+        const squared = wr * wr + wi * wi;
+        converged =
+          squared < ABERTH_SQUARED_LOW ||
+          (squared <= ABERTH_SQUARED_HIGH &&
+            Math.hypot(wr, wi) < ABERTH_TOLERANCE);
+      }
     }
     if (converged) {
       return 1;
@@ -380,6 +385,24 @@ function createRootFinder(frames, settings, store) {
   };
 }
 
+function orderCandidates(indices, count, column, row) {
+  for (let i = 1; i < count; i++) {
+    const candidate = indices[i];
+    let slot = i;
+    while (slot > 0) {
+      const previous = indices[slot - 1];
+      const order =
+        column[row + candidate] - column[row + previous] ||
+        candidate - previous;
+      if (order >= 0) {
+        break;
+      }
+      indices[slot--] = previous;
+    }
+    indices[slot] = candidate;
+  }
+}
+
 /**
  * Candidates of frame t for a tract of `length` cm into `store`: those of
  * order p below 5500 * 16.5 / L Hz, then those of lower orders that lie
@@ -420,20 +443,16 @@ function selectCandidates(store, t, length, scratch) {
   }
   // Narrowest first (stable: the lower index wins a tie), then the first
   // MAX_CANDIDATES by frequency.
-  const chosen = Array.from(scratch.subarray(0, kept));
-  chosen.sort(
-    (x, y) => store.rawBandwidth[raw + x] - store.rawBandwidth[raw + y] || x - y
-  );
-  chosen.length = Math.min(chosen.length, MAX_CANDIDATES);
-  chosen.sort(
-    (x, y) => store.rawFrequency[raw + x] - store.rawFrequency[raw + y] || x - y
-  );
+  orderCandidates(scratch, kept, store.rawBandwidth, raw);
+  kept = Math.min(kept, MAX_CANDIDATES);
+  orderCandidates(scratch, kept, store.rawFrequency, raw);
   const row = t * MAX_CANDIDATES;
-  chosen.forEach((index, slot) => {
+  for (let slot = 0; slot < kept; slot++) {
+    const index = scratch[slot];
     store.frequency[row + slot] = store.rawFrequency[raw + index];
     store.bandwidth[row + slot] = store.rawBandwidth[raw + index];
-  });
-  store.count[t] = chosen.length;
+  }
+  store.count[t] = kept;
 }
 
 /** ref[k] = (2k - 1) c / (4 L), k = 1 .. K, into `out` (index k - 1). */
@@ -455,7 +474,7 @@ function frameStates(store, settings, t, references, scratch) {
   const { formants: K, keep } = settings;
   const n = store.count[t];
   const row = t * MAX_CANDIDATES;
-  const { cost, assign } = scratch;
+  const { cost, assign, totals } = scratch;
   for (let k = 0; k < K; k++) {
     for (let i = 0; i < n; i++) {
       const f = store.frequency[row + i];
@@ -490,7 +509,8 @@ function frameStates(store, settings, t, references, scratch) {
       out[(base + position) * COLUMNS + k] = k < K ? assign[k] : -1;
     }
   }
-  function visit(k, from, total) {
+  function visit(k, from) {
+    const total = totals[k];
     if (states === keep && !(total < local[base + states - 1])) {
       return;
     }
@@ -499,13 +519,16 @@ function frameStates(store, settings, t, references, scratch) {
       return;
     }
     assign[k] = -1;
-    visit(k + 1, from, total + EMPTY_COST);
+    totals[k + 1] = total + EMPTY_COST;
+    visit(k + 1, from);
     for (let i = from; i < n; i++) {
       assign[k] = i;
-      visit(k + 1, i + 1, total + cost[k * MAX_CANDIDATES + i]);
+      totals[k + 1] = total + cost[k * MAX_CANDIDATES + i];
+      visit(k + 1, i + 1);
     }
   }
-  visit(0, 0, 0);
+  totals[0] = 0;
+  visit(0, 0);
   store.states[t] = states;
 }
 
@@ -541,9 +564,24 @@ function nasalFlag(frames, store, settings, t, firstReference) {
 function createViterbi(store, settings, rows) {
   const { keep, formants: K } = settings;
   const back = new Uint8Array(rows * keep);
+  const movements = new Float64Array(MAX_CANDIDATES * MAX_CANDIDATES);
   let previous = new Float64Array(keep);
   let current = new Float64Array(keep);
   let newest = -1;
+
+  // A frequency pair can fill different formant numbers in many states.
+  // Its cost depends only on the pair, so evaluate the logarithm once.
+  function movementCosts(t) {
+    const now = t * MAX_CANDIDATES;
+    const before = now - MAX_CANDIDATES;
+    for (let i = 0; i < store.count[t]; i++) {
+      for (let j = 0; j < store.count[t - 1]; j++) {
+        movements[i * MAX_CANDIDATES + j] = Math.abs(
+          Math.log2(store.frequency[now + i] / store.frequency[before + j])
+        );
+      }
+    }
+  }
 
   function transition(t, s, p) {
     const a = (t * keep + s) * COLUMNS;
@@ -553,12 +591,7 @@ function createViterbi(store, settings, rows) {
       const i = store.assign[a + k];
       const j = store.assign[b + k];
       if (i >= 0 && j >= 0) {
-        total += Math.abs(
-          Math.log2(
-            store.frequency[t * MAX_CANDIDATES + i] /
-              store.frequency[(t - 1) * MAX_CANDIDATES + j]
-          )
-        );
+        total += movements[i * MAX_CANDIDATES + j];
       } else if (i >= 0 || j >= 0) {
         total += APPEAR_COST;
       }
@@ -570,6 +603,9 @@ function createViterbi(store, settings, rows) {
     step(t, reset) {
       const states = store.states[t];
       const before = t > 0 ? store.states[t - 1] : 0;
+      if (t > 0 && !reset) {
+        movementCosts(t);
+      }
       let cheapest = 0;
       for (let p = 1; p < before; p++) {
         if (previous[p] < previous[cheapest]) {
@@ -660,9 +696,10 @@ function sortedMedian(values, count) {
 }
 
 /** Empty track of `frames.capacity` rows. */
-function createTrack(frames, settings) {
-  const rows = frames.capacity;
-  const matrix = () => new Float32Array(rows * COLUMNS).fill(NaN);
+function createTrack(frames, settings, firstOnly) {
+  const rows = firstOnly ? frames.count : frames.capacity;
+  const width = firstOnly ? 1 : COLUMNS;
+  const matrix = () => new Float32Array(rows * width).fill(NaN);
   return {
     hop: settings.hop,
     startTime: frames.startTime,
@@ -671,11 +708,11 @@ function createTrack(frames, settings) {
     formants: settings.formants,
     vocalTractLength: settings.fixedLength ?? DEFAULT_LENGTH,
     frequency: matrix(),
-    bandwidth: matrix(),
-    variance: matrix(),
-    level: matrix(),
-    valid: new Uint8Array(rows * COLUMNS),
-    nasal: new Uint8Array(rows),
+    bandwidth: firstOnly ? null : matrix(),
+    variance: firstOnly ? null : matrix(),
+    level: firstOnly ? null : matrix(),
+    valid: new Uint8Array(rows * width),
+    nasal: firstOnly ? null : new Uint8Array(rows),
   };
 }
 
@@ -687,9 +724,11 @@ function createTrack(frames, settings) {
  * rows first .. last - 1 of the track; the filter state at last - 1 is
  * saved for the next call.
  */
-function createSmoother(frames, store, settings, track, rows) {
-  const { formants: K, processNoise, maxGap, pitch, keep } = settings;
-  const size = rows * COLUMNS;
+function createSmoother(frames, store, settings, track, rows, firstOnly) {
+  const { processNoise, maxGap, pitch, keep } = settings;
+  const K = firstOnly ? 1 : settings.formants;
+  const stride = firstOnly ? 1 : COLUMNS;
+  const size = rows * stride;
   const x = new Float64Array(size);
   const variance = new Float64Array(size);
   const smoothX = new Float64Array(size);
@@ -723,7 +762,7 @@ function createSmoother(frames, store, settings, track, rows) {
       const q = processNoise[k];
       let { x: value, variance: p, gap: empty, width: held } = saved[k];
       for (let t = first; t <= newest; t++) {
-        const cell = t * COLUMNS + k;
+        const cell = t * stride + k;
         const index = store.assign[(t * keep + path[t]) * COLUMNS + k];
         p += q;
         start[cell] = 0;
@@ -757,12 +796,12 @@ function createSmoother(frames, store, settings, track, rows) {
   function backward(first, newest) {
     for (let k = 0; k < K; k++) {
       const q = processNoise[k];
-      const end = newest * COLUMNS + k;
+      const end = newest * stride + k;
       smoothX[end] = x[end];
       smoothVariance[end] = variance[end];
       for (let t = newest - 1; t >= first; t--) {
-        const cell = t * COLUMNS + k;
-        const next = cell + COLUMNS;
+        const cell = t * stride + k;
+        const next = cell + stride;
         if (start[next] || gap[cell] > maxGap) {
           smoothX[cell] = x[cell];
           smoothVariance[cell] = variance[cell];
@@ -787,11 +826,15 @@ function createSmoother(frames, store, settings, track, rows) {
       const p = frames.order;
       for (let t = first; t < last; t++) {
         const nasal = store.nasal[t];
-        track.nasal[t] = nasal;
-        const power = 10 ** (frames.gain[t] / 10);
-        const predictor = frames.lpc.subarray(t * p, (t + 1) * p);
+        let power;
+        let predictor;
+        if (!firstOnly) {
+          track.nasal[t] = nasal;
+          power = 10 ** (frames.gain[t] / 10);
+          predictor = frames.lpc.subarray(t * p, (t + 1) * p);
+        }
         for (let k = 0; k < K; k++) {
-          const cell = t * COLUMNS + k;
+          const cell = t * stride + k;
           const valid = gap[cell] <= maxGap ? 1 : 0;
           track.valid[cell] = valid;
           if (!valid) {
@@ -799,6 +842,9 @@ function createSmoother(frames, store, settings, track, rows) {
           }
           const frequency = smoothX[cell];
           track.frequency[cell] = frequency;
+          if (firstOnly) {
+            continue;
+          }
           track.bandwidth[cell] = width[cell];
           track.variance[cell] =
             smoothVariance[cell] * (nasal ? NASAL_VARIANCE : 1);
@@ -813,7 +859,7 @@ function createSmoother(frames, store, settings, track, rows) {
       }
       if (last > first) {
         for (let k = 0; k < K; k++) {
-          const cell = (last - 1) * COLUMNS + k;
+          const cell = (last - 1) * stride + k;
           saved[k] = {
             x: x[cell],
             variance: variance[cell],
@@ -837,8 +883,11 @@ function createSmoother(frames, store, settings, track, rows) {
  * @param {Partial<typeof FORMANT_DEFAULTS>} [options]
  */
 export function formantCandidates(frames, options = {}) {
+  return formantCandidateReader(frames, options, frames.count).read();
+}
+
+function formantCandidateReader(frames, options, rows) {
   const settings = formantSettings(frames, options);
-  const rows = frames.count;
   const width = Math.ceil(settings.orders.reduce((sum, m) => sum + m / 2, 0));
   const store = {
     rawWidth: width,
@@ -848,15 +897,22 @@ export function formantCandidates(frames, options = {}) {
     rawCount: new Uint8Array(rows),
   };
   const finder = createRootFinder(frames, settings, store);
-  for (let t = 0; t < rows; t++) {
-    finder.find(t);
-  }
-  return {
+  let read = 0;
+  const candidates = {
     width,
     count: store.rawCount,
     frequency: store.rawFrequency,
     bandwidth: store.rawBandwidth,
     rank: store.rawRank,
+  };
+  return {
+    rows,
+    read() {
+      for (; read < frames.count; read++) {
+        finder.find(read);
+      }
+      return candidates;
+    },
   };
 }
 
@@ -864,10 +920,10 @@ export function formantCandidates(frames, options = {}) {
  * Tracker over a frame set; `batch` (used by `trackFormants`) estimates the
  * tract length from the whole path before anything is committed.
  */
-function createTracker(frames, options, batch, candidates) {
+function createTracker(frames, options, batch, candidates, firstOnly = false) {
   const settings = formantSettings(frames, options);
   const { keep, lag, formants: K } = settings;
-  const rows = frames.capacity;
+  const rows = batch ? frames.count : frames.capacity;
   const rawWidth = settings.orders.reduce((sum, m) => sum + m / 2, 0);
   const store = {
     rawWidth: Math.ceil(rawWidth),
@@ -888,13 +944,21 @@ function createTracker(frames, options, batch, candidates) {
   };
   const finder = candidates ? null : createRootFinder(frames, settings, store);
   const path = new Uint8Array(rows);
-  const track = createTrack(frames, settings);
-  const smoother = createSmoother(frames, store, settings, track, rows);
+  const track = createTrack(frames, settings, firstOnly);
+  const smoother = createSmoother(
+    frames,
+    store,
+    settings,
+    track,
+    rows,
+    firstOnly
+  );
   const references = new Float64Array(K);
   const scratch = {
     index: new Int32Array(store.rawWidth),
     cost: new Float64Array(COLUMNS * MAX_CANDIDATES),
     assign: new Int8Array(COLUMNS),
+    totals: new Float64Array(COLUMNS + 1),
   };
   const lengths = new Float64Array(rows);
   let lengthCount = 0;
@@ -1045,20 +1109,42 @@ export function trackFormants(frames, options = {}) {
 
 const batchCandidates = new WeakMap();
 
-/** Share roots across consumers of the same completed batch frame set. */
-export function trackBatchFormants(frames, options) {
+/** Share roots across consumers of the same frame set. Live callers keep
+ * their existing frames and append stable reflection coefficients. */
+export function trackBatchFormants(frames, options, growing = false) {
   if (options.maxBandwidth !== undefined) {
     return trackFormants(frames, options);
-  }
-  if (!batchCandidates.has(frames)) {
-    batchCandidates.set(frames, formantCandidates(frames));
   }
   const tracker = createTracker(
     frames,
     options,
     true,
-    batchCandidates.get(frames)
+    readBatchCandidates(frames, growing)
   );
   tracker.advance(true);
   return tracker.track;
+}
+
+/** Smooth only F1 after the same joint search over all formants. */
+export function trackFirstFormant(frames, options, reuse) {
+  const candidates = reuse
+    ? readBatchCandidates(frames, reuse === 'growing')
+    : undefined;
+  const tracker = createTracker(frames, options, true, candidates, true);
+  tracker.advance(true);
+  const { frequency, valid } = tracker.track;
+  return { frequency, valid };
+}
+
+function readBatchCandidates(frames, growing) {
+  let reader = batchCandidates.get(frames);
+  if (!reader || frames.count > reader.rows) {
+    reader = formantCandidateReader(
+      frames,
+      {},
+      growing ? frames.capacity : frames.count
+    );
+    batchCandidates.set(frames, reader);
+  }
+  return reader.read();
 }

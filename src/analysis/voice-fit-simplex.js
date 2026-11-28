@@ -13,7 +13,9 @@ export function* simplex(initial, evaluate, budget, step = 0.1) {
     used++;
     const value = evaluate(x.map(clamp));
     yield value;
-    return { x: x.map(clamp), ...value };
+    // Only uncertainty and the search use the saved vertices. The fit keeps
+    // the winning evaluation, whose diagnostics can still refer to its audio.
+    return { x: x.map(clamp), cost: value.cost, head: value.head };
   };
   vertices.push(yield* run(initial));
   for (let i = 0; i < initial.length && used < budget; i++) {

@@ -9,6 +9,14 @@ import {
   packWordTransitions,
 } from '../src/recognition/data/index.js';
 import {
+  openHmmArchive,
+  packHmmArchive,
+} from '../src/recognition/hmm-archive.js';
+import {
+  openHmmWords,
+  packHmmWords,
+} from '../src/recognition/hmm-pronunciations.js';
+import {
   countPronunciations,
   phoneProbability,
 } from '../src/recognition/language-model.js';
@@ -23,19 +31,96 @@ import {
 import { withWordSearch } from '../src/recognition/word-search.js';
 import { phoneDistance } from '../src/recognition/phone-distance.js';
 
+const encode = (value) =>
+  new globalThis.TextEncoder().encode(JSON.stringify(value));
+const decode = (bytes) =>
+  JSON.parse(new globalThis.TextDecoder().decode(bytes));
+
+it('opens all prepared HMM columns in the archive buffer', () => {
+  const network = {
+    nodes: { first: Uint32Array.of(3, 7), score: Float64Array.of(-2.51) },
+    tree: { root: [1] },
+    emit: Uint16Array.of(27, 31),
+    wordId: Uint32Array.of(0, 1),
+    nextWord: Uint32Array.of(0, 3),
+    words: { flags: Uint8Array.of(2), symbols: [{ symbol: 'ʃ' }] },
+  };
+  const archive = packHmmArchive(network, 3, encode);
+  const opened = openHmmArchive(archive, 3, decode);
+  expect(opened).toEqual(network);
+  for (const column of [
+    ...Object.values(opened.nodes),
+    opened.emit,
+    opened.wordId,
+    opened.nextWord,
+    opened.words.flags,
+  ]) {
+    expect(column.buffer === archive.buffer).toBe(true);
+  }
+  expect(openHmmArchive(archive, 2, decode)).toBeUndefined();
+  expect(() => openHmmArchive(archive.subarray(0, -1), 3, decode)).toThrow(
+    RangeError
+  );
+});
+
+it('retains supplemental word names and weights without assigning corpus ranks', () => {
+  const known = [{ word: 'the', count: 200, prior: 100 }];
+  const ranked = {
+    length: known.length,
+    name: (id) => known[id]?.word,
+    weight: (id) => known[id]?.prior,
+  };
+  const tokens = [{ kind: 'vowel', symbol: 'ə' }];
+  const words = [
+    { word: 'the', count: 100, tokens },
+    { word: 'television', count: 3.25, tokens },
+    { word: 'television', count: 3.25, tokens: tokens.slice() },
+    { word: '', oov: true, begin: true, tokens },
+  ];
+  const archive = packHmmArchive(
+    {
+      nodes: {},
+      emit: new Uint16Array(),
+      wordId: new Uint32Array(),
+      nextWord: new Uint32Array(),
+      words: packHmmWords(words, known),
+    },
+    4,
+    encode
+  );
+  const prepared = openHmmArchive(archive, 4, decode).words;
+  const table = openHmmWords(prepared, ranked, 'en', 1);
+  expect(prepared.supplemental).toEqual([{ word: 'television', count: 3.25 }]);
+  expect([table.rank(1), table.rank(2), table.rank(3)]).toEqual([0, -1, -1]);
+  expect(words.map((word, id) => table.read(1 + id))).toEqual(
+    words.map((word) => ({ ...word, lang: 'en' }))
+  );
+});
+
 it('opens the same discounted transition costs from packed word counts', () => {
   const language = 'en';
-  const { words, transitionRow } = getCounts(language);
+  const { words, transitionRow, transitionCost, transitionCostAt } =
+    getCounts(language);
   const [offsets, pairs] = packWordTransitions(language);
   const read = openWordTransitions(
     words,
     Uint32Array.from(offsets),
     Uint32Array.from(pairs)
   );
+  const ranks = new Map(words.map(({ word }, index) => [word, index]));
   for (const { word } of words.slice(0, 128)) {
-    expect(read(word)).toEqual(transitionRow(word));
+    const rank = ranks.get(word);
+    const actual = read.row(rank);
+    for (const [previous, cost] of actual ?? []) {
+      const previousRank = ranks.get(previous);
+      expect(read.cost(rank, previousRank)).toBe(cost);
+      expect(transitionCostAt(rank, previousRank)).toBe(cost);
+      expect(transitionCost(word, previous)).toBe(cost);
+    }
+    expect(actual).toEqual(transitionRow(word));
+    expect(read.cost(rank, -1)).toBeUndefined();
   }
-  expect(read('mangosteenish')).toBeUndefined();
+  expect(read.row(-1)).toBeUndefined();
 });
 
 it('preserves language scores for known and missing phones in generated count tables', () => {
@@ -89,15 +174,30 @@ it('reads stressed pronunciations, homophones and Mandarin tones from a prepared
     }
     const words = [...counts].map(([word, count]) => ({ word, count }));
     const lexicon = { root, words };
-    const rows = JSON.parse(
-      JSON.stringify(serializeLexicon(lexicon, language))
-    );
+    const rows = serializeLexicon(lexicon, language);
     const prepared = openPreparedLexicon(rows, language, words);
+    const [phones, offsets, feature, wordOffsets, ids, reading] = rows;
+    const legacy = openPreparedLexicon(
+      [
+        phones,
+        Uint32Array.from(offsets),
+        Uint32Array.from(feature),
+        Uint32Array.from(wordOffsets),
+        Uint32Array.from(ids),
+        Array.from(ids, (_, i) =>
+          reading.text.slice(reading.offsets[i], reading.offsets[i + 1])
+        ),
+      ],
+      language,
+      words
+    );
     for (const [, ipa] of pronunciations) {
       const { tokens } = parseIpa(ipa);
       const exact = (trie) =>
         exactCandidates(tokens, 0, tokens.length, trie, language);
       expect(exact(prepared)).toEqual(exact(lexicon));
+      expect(exact({ root: prepared.root, prepared })).toEqual(exact(lexicon));
+      expect(exact(legacy)).toEqual(exact(lexicon));
       const near = (trie) =>
         withWordSearch(
           trie,
@@ -116,4 +216,21 @@ it('reads stressed pronunciations, homophones and Mandarin tones from a prepared
       expect(near({ root: prepared.root, prepared })).toEqual(near(lexicon));
     }
   }
+});
+
+it('opens ranked trie entries with lazy tokens and the original word counts', () => {
+  const root = trieNode();
+  const { ranked } = getCounts('en');
+  const word = ranked.read(ranked.rank('the'));
+  addPronunciation(root, { ...word, ipa: 'ðə' }, 'en');
+  const { table } = openPreparedLexicon(
+    serializeLexicon({ root, words: getCounts('en').words }, 'en'),
+    'en',
+    ranked
+  );
+  const terminal = table.terminal.findIndex(Boolean);
+  const [entry] = table.entriesAt(terminal);
+  const tokens = parseIpa('ðə').tokens;
+  expect(entry).toEqual({ ...word, ipa: 'ðə', tokens });
+  expect(entry.tokens).toBe(entry.tokens);
 });

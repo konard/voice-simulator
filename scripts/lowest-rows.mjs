@@ -17,16 +17,18 @@ import {
   recognize,
   synthesize,
 } from '../src/index.js';
-import { resample } from '../src/audio/resample.js';
+import { resampleWithStorage } from '../src/audio/resample.js';
+import { sampleStorage } from '../src/audio/sample-storage.js';
 import { createEngine } from '../src/engine/index.js';
 import { createRecognitionEngine } from '../src/recognition/engine.js';
-import { loadGolden } from '../tests/helpers/golden.js';
+import { goldenRecordings } from '../tests/helpers/golden.js';
 import { roundTrip, sentences } from '../tests/helpers/roundtrip.js';
 import { LABELS, HEAD, LANGUAGES } from '../tests/helpers/recognition-modes.js';
 import { BASELINE_TEXT } from '../src/recognition/mode-baseline.js';
+import { synthesizeWithStorage } from '../src/synthesize.js';
 import {
   BENCHMARK,
-  loadBenchmark,
+  benchmarkRecordings,
   prepareReference,
   scoreUtterance,
 } from '../tests/heavy/helpers/benchmark.js';
@@ -134,7 +136,7 @@ function speech(head, seconds) {
 }
 
 /** Synthesis on the round-trip sentences of issue 75. */
-function synthesisRow({ engine, limit, baseline }) {
+function synthesisRow({ engine, limit, baseline, profile }) {
   // Twenty sentences per language and preset; --limit caps the utterances.
   const cases = [];
   for (let index = 0; index < 20; index++) {
@@ -147,6 +149,7 @@ function synthesisRow({ engine, limit, baseline }) {
   cases.length = Math.min(cases.length, limit);
   const heard = (samples, sampleRate, options) =>
     recognize(samples, sampleRate, { ...options, engine: engine.recognition });
+  const storage = sampleStorage();
   const measure = (tier, timed) => {
     const errors = [];
     let seconds = 0;
@@ -154,16 +157,44 @@ function synthesisRow({ engine, limit, baseline }) {
     let audioSeconds = 0;
     for (const { lang, preset, text } of cases) {
       const options = { lang, tier, head: 'random', preset, seed: 1 };
-      const [spoken, cpu] = cpuTime(() =>
-        synthesize(text, { ...options, engine: timed ? engine.render : 'js' })
+      const [spoken, cpu] = cpuTime(() => {
+        const { samples, sampleRate, ipa, timeline, head } =
+          synthesizeWithStorage(
+            text,
+            { ...options, engine: timed ? engine.render : 'js' },
+            storage
+          );
+        // Keep the waveform and references used by the round trip. The
+        // renderer has finished with the plan and its control channels.
+        return {
+          samples,
+          sampleRate,
+          ipa,
+          timeline: { words: timeline.words },
+          head,
+        };
+      });
+      profile?.(
+        `Synthesis ${tier} ${lang} ${preset} ${errors.length + 1} Rendered`
       );
       seconds += cpu;
       audioSeconds += spoken.samples.length / spoken.sampleRate;
+      const recognize = profile
+        ? (samples, sampleRate, settings) =>
+            heard(samples, sampleRate, {
+              ...settings,
+              profile: (stage) =>
+                profile(
+                  `Synthesis ${tier} ${lang} ${preset} ${errors.length + 1} ${stage}`
+                ),
+            })
+        : heard;
       const [result, recognitionCpu] = cpuTime(() =>
-        roundTrip(text, { ...options, spoken, recognize: heard })
+        roundTrip(text, { ...options, spoken, recognize })
       );
       recognitionSeconds += recognitionCpu;
       errors.push(lang === 'zh' ? result.cer : result.wer);
+      profile?.(`Synthesis ${tier} ${lang} ${preset} ${errors.length}`);
     }
     return { wer: pooled(errors), seconds, recognitionSeconds, audioSeconds };
   };
@@ -185,36 +216,45 @@ function synthesisRow({ engine, limit, baseline }) {
   };
 }
 
+function convertRecording({ samples, sampleRate }, rate, storage) {
+  return sampleRate === rate
+    ? samples
+    : resampleWithStorage(samples, sampleRate, rate, storage);
+}
+
 /** Recognition on the public benchmark sets of issue 76. */
-async function recognitionRow({ engine, limit, baseline }) {
+async function recognitionRow({ engine, limit, baseline, profile }) {
   warmUp({ engine: engine.recognition });
+  const storage = sampleStorage();
+  const conversion = sampleStorage();
   const sums = { low: [], base: [] };
   let seconds = 0;
   let audioSeconds = 0;
   let utterances = 0;
   for (const set of BENCHMARK.sets) {
-    const rows = await loadBenchmark({ set, limit: Math.min(set.rows, limit) });
-    for (const row of rows) {
+    for await (const row of benchmarkRecordings({ set, limit, storage })) {
       const reference = prepareReference(row, set.language);
       if (!reference) {
         continue;
       }
       utterances++;
-      const low = resample(row.samples, row.sampleRate, RATE);
+      const low = convertRecording(row, RATE, conversion);
       const [result, cpu] = cpuTime(() =>
         recognize(low, RATE, {
           level: LEVEL,
           engine: engine.recognition,
+          profile,
         })
       );
       seconds += cpu;
       audioSeconds += low.length / RATE;
       sums.low.push(scoreUtterance(row, result, set.language, { reference }));
       if (baseline) {
-        const wide = resample(row.samples, row.sampleRate, 16000);
+        const wide = convertRecording(row, 16000, conversion);
         const heard = recognize(wide, 16000, {
           level: 'medium',
           engine: engine.recognition,
+          profile,
         });
         sums.base.push(scoreUtterance(row, heard, set.language, { reference }));
       }
@@ -275,14 +315,16 @@ export function streamInput(seconds) {
  * wall time from the first chunk to the first partial with words; load is
  * the CPU time of the stream over the audio time.
  */
-async function streamingRow({ engine, limit }) {
+async function streamingRow({ engine, limit, profile }) {
   const duration = Math.min(60, 5 * limit);
   const samples = streamInput(duration);
+  profile?.('Input');
   const options = {
     sampleRate: RATE,
     level: LEVEL,
     languages: ['en'],
     engine: engine.recognition,
+    profile,
   };
   warmUp(options);
   const recognizer = createRecognizer(options);
@@ -311,8 +353,11 @@ async function streamingRow({ engine, limit }) {
     }
     return recognizer.flush();
   });
+  profile?.('Stream');
   const batch = recognize(samples, RATE, options);
+  profile?.('Batch');
   const wholeInput = recognize(samples, RATE, { ...options, unsplit: true });
+  profile?.('Whole input');
   const mismatch = errorRate(batch.text, stream.text, 'word');
   return {
     seconds,
@@ -363,7 +408,7 @@ function voiceFitRow({ engine, limit }) {
 }
 
 /** A real-time voice session on 20 s of each preset voice. */
-async function sessionRow({ engine, limit }) {
+async function sessionRow({ engine, limit, profile }) {
   let seconds = 0;
   let audioSeconds = 0;
   let stable = 0;
@@ -373,6 +418,7 @@ async function sessionRow({ engine, limit }) {
   for (const preset of presets) {
     const truth = presetHeadConfig(preset);
     const samples = speech(truth, 20);
+    profile?.(`Session input ${preset}`);
     const chunk = 0.02 * RATE;
     const [session, cpu] = await cpuTimeAsync(async () => {
       const session = createVoiceSession({
@@ -381,6 +427,7 @@ async function sessionRow({ engine, limit }) {
         level: LEVEL,
         realtime: true,
         engine: engine.render,
+        profile,
       });
       let stableAt = null;
       session.on('state', ({ state, time }) => {
@@ -413,6 +460,7 @@ async function sessionRow({ engine, limit }) {
     const head = session.session.voice
       ? loadVoice(session.session.voice).head
       : null;
+    profile?.(`Session complete ${preset}`);
     for (const key of Object.keys(errors)) {
       errors[key].push(head ? relative(head[key], truth[key]) : Infinity);
     }
@@ -441,34 +489,49 @@ async function sessionRow({ engine, limit }) {
 }
 
 /** copyRecording on the golden set, resampled to 8 kHz. */
-function copyRow({ engine, limit, traceCopy }) {
+function copyForScoring(samples, engine, profile) {
+  const [copy, cpu] = cpuTime(() =>
+    copyRecording(samples, RATE, { tier: TIER, engine: engine.render, profile })
+  );
+  return {
+    samples: copy.samples,
+    sampleRate: copy.sampleRate,
+    language: copy.score.language,
+    ipa: copy.recognition.ipa,
+    cents: copy.metrics.f0?.rmseCents,
+    timingError: copy.metrics.timingError ?? Infinity,
+    cpu,
+  };
+}
+
+async function copyRow({ engine, limit, profile, traceCopy }) {
+  const storage = sampleStorage();
+  const conversion = sampleStorage();
   let seconds = 0;
   let audioSeconds = 0;
   const f0 = [];
   const timing = [];
   const phonemes = [];
-  for (const item of loadGolden().slice(0, limit)) {
-    const samples = resample(item.samples, item.sampleRate, RATE);
-    const [copy, cpu] = cpuTime(() =>
-      copyRecording(samples, RATE, { tier: TIER, engine: engine.render })
-    );
+  for await (const item of goldenRecordings({ limit, storage })) {
+    const samples = convertRecording(item, RATE, conversion);
+    const copy = copyForScoring(samples, engine, profile);
+    const { cents, cpu, language, timingError } = copy;
     seconds += cpu;
     audioSeconds += samples.length / RATE;
-    const cents = copy.metrics.f0?.rmseCents;
     const pitchError = Number.isFinite(cents) ? cents / 100 : Infinity;
-    const timingError = copy.metrics.timingError ?? Infinity;
     f0.push(pitchError);
     timing.push(timingError);
     const again = recognize(copy.samples, copy.sampleRate, {
       level: LEVEL,
-      languages: [copy.score.language],
+      languages: [language],
       engine: engine.recognition,
+      profile,
     });
-    const phones = errorRate(copy.recognition.ipa, again.ipa, 'phone');
+    const phones = errorRate(copy.ipa, again.ipa, 'phone');
     phonemes.push(phones);
     traceCopy?.({
       id: item.id,
-      language: copy.score.language,
+      language,
       f0RmseSemitones: round(pitchError),
       timingErrorMs: round(timingError, 1),
       phoneEdits: phones.distance,
@@ -494,7 +557,7 @@ function copyRow({ engine, limit, traceCopy }) {
 }
 
 /** Every markup mode of issue 50 rendered at 8 kHz and recognised. */
-function modesRow({ engine, limit }) {
+function modesRow({ engine, limit, profile }) {
   let seconds = 0;
   let renderSeconds = 0;
   let audioSeconds = 0;
@@ -507,6 +570,7 @@ function modesRow({ engine, limit }) {
       languages: [lang],
       voice: HEAD,
       engine: engine.recognition,
+      profile,
     };
     // The models and the baseline of the voice load once per language.
     const neutral = telephone(
@@ -515,6 +579,7 @@ function modesRow({ engine, limit }) {
       'js'
     );
     recognize(neutral.samples, neutral.sampleRate, heard);
+    profile?.(`Warm ${lang}`);
     for (const label of LABELS.slice(0, limit)) {
       const options = { lang, head: HEAD, markup: true };
       const { ipa } = prepareUtterance(BASELINE_TEXT[lang], {
@@ -532,6 +597,7 @@ function modesRow({ engine, limit }) {
       const [result, cpu] = cpuTime(() =>
         recognize(audio.samples, audio.sampleRate, heard)
       );
+      profile?.(`${lang} ${label}`);
       seconds += cpu;
       audioSeconds += audio.samples.length / audio.sampleRate;
       total++;

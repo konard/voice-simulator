@@ -5,15 +5,16 @@
  * phone decoder's (`audioToIpa` in decode.js), with the words' language.
  * Unlicense.
  */
-import { analyzeFrames } from './frontend.js';
-import { trackPitch } from './pitch.js';
-import { HMM_RATE, hmmBoundaryTime, hmmFeatures } from './hmm-features.js';
+import { analyzeFrames, analyzeWordFrames } from './frontend.js';
+import { trackPitch, trackPitchFrames } from './pitch.js';
+import { hmmBoundaryTime, hmmFeatures } from './hmm-features.js';
 import { getHmmModel } from './hmm-model.js';
 import { getNetwork, tokenIpa } from './hmm-network.js';
 import { alignWords, decodeWords } from './hmm-decode.js';
 import { syllablesWithWhisper } from './decode-pipeline.js';
 import { spellSounds } from './phones-to-letters.js';
 import { parseIpa } from '../ipa/parse.js';
+import { measure } from './profile.js';
 import { clipWhisperSpans, findWhisper } from './whisper.js';
 import {
   whisperModeSpans,
@@ -30,32 +31,45 @@ const REDUCED = {
   ru: new Set(['ɐ', 'ə', 'ɪ', 'ʊ']),
 };
 
+function preferVowel(phone, previous, reduced) {
+  if (!previous) {
+    return true;
+  }
+  const full = !reduced.has(phone.token.symbol);
+  const previousFull = !reduced.has(previous.token.symbol);
+  return full === previousFull
+    ? phone.to - phone.from > previous.to - previous.from
+    : full;
+}
+
 /**
  * Primary stress of the words from the phone loop: the longest full vowel
  * (any vowel when none is full). Russian marks words of two or more
  * vowels and English every word, like their pronunciations; Hindi none.
  */
 export function stressOutOfVocabulary(words, aligned) {
-  words.forEach((w, wi) => {
-    const reduced = REDUCED[w.lang];
-    if (!w.oov || !reduced) {
-      return;
+  if (!words.some(({ oov, lang }) => oov && REDUCED[lang])) {
+    return;
+  }
+  const counts = new Uint32Array(words.length);
+  const best = new Array(words.length);
+  for (const phone of aligned) {
+    const index = phone.word;
+    const word = words[index];
+    const reduced = word?.oov && REDUCED[word.lang];
+    if (!reduced || phone.token.kind !== 'vowel') {
+      continue;
     }
-    const vowels = aligned.filter(
-      (a) => a.word === wi && a.token.kind === 'vowel'
-    );
-    if (vowels.length < (w.lang === 'ru' ? 2 : 1)) {
-      return;
+    counts[index]++;
+    if (preferVowel(phone, best[index], reduced)) {
+      best[index] = phone;
     }
-    const full = vowels.filter((a) => !reduced.has(a.token.symbol));
-    let best = null;
-    for (const a of full.length ? full : vowels) {
-      if (!best || a.to - a.from > best.to - best.from) {
-        best = a;
-      }
+  }
+  for (let index = 0; index < words.length; index++) {
+    if (counts[index] >= (words[index].lang === 'ru' ? 2 : 1)) {
+      best[index].token.stress = 1;
     }
-    best.token.stress = 1;
-  });
+  }
 }
 
 function timedSegments(aligned) {
@@ -97,33 +111,58 @@ function timedSegments(aligned) {
  * with times, the pitch track and the frame energies.
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
- * @param {{languages?: string[], maxWords?: number, oov?: boolean,
+ * @param {{languages?: string[], maxWords?: number, oov?: boolean, framePitch?: boolean,
+ *   includeWords?: boolean, includeSyllables?: boolean, includeModeFrames?: boolean,
  *   whisper?: 'auto'|false|{start: number, end: number}[],
- *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>,
- *   analysis?: ReturnType<typeof analyzeFrames>}}
+ *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>}}
  *   [options] `search` tunes the beam and weights; `whisper` finds
  *   whispered spans ('auto'), skips them (false) or takes them as given;
  *   other decoder options (the phone decoder's beam, hop and rate) do not
  *   apply.
  */
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
+  const model = getHmmModel();
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
-  const analysis =
-    options.frontEnd?.frames ??
-    options.analysis ??
-    analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const { analysis, pitch } = hmmFrontEnd(samples, sampleRate, options);
+  const { feats, frames, tone } = hmmFeatures(
+    samples,
+    sampleRate,
+    model.lda,
+    pitch,
+    {
+      includeTone: languages.includes('zh'),
+      framePitch: true,
+      storage: options.frameStorage,
+    }
+  );
+  const search = { ...options.search, tone };
   // Features are normalised per input, so silence alone would decode as
   // words: decode only inputs with frames the front end calls speech.
-  const reading = hasSpeech(analysis)
-    ? decodeSpeech(samples, sampleRate, analysis, { ...options, languages })
-    : { decoded: { words: [], lang: null }, aligned: [] };
-  const { decoded, aligned } = reading;
+  const network =
+    frames && hasSpeech(analysis)
+      ? measure(options.profile, 'HMM network', () =>
+          getNetwork(model, languages, {
+            maxWords: options.maxWords,
+            oov: options.oov,
+          })
+        )
+      : null;
+  const decoded = network
+    ? measure(options.profile, 'HMM search', () =>
+        decodeWords(network, feats, frames, search, options.workspaces)
+      )
+    : { words: [], lang: null };
+  // Words from the phone loop get their own tokens to take a stress.
+  decoded.words = decoded.words.map((w) =>
+    w.oov ? { ...w, tokens: w.tokens.map((t) => ({ ...t })) } : w
+  );
+  const aligned = decoded.words.length
+    ? measure(options.profile, 'HMM alignment', () =>
+        alignWords(network, feats, frames, decoded.words, search)
+      )
+    : [];
   stressOutOfVocabulary(decoded.words, aligned);
   const segments = timedSegments(aligned);
-  const pitch =
-    options.frontEnd?.tracks.pitch ??
-    reading.pitch ??
-    trackPitch(analysis, { kernels: options.kernels });
   const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
     whisper: options.whisper ?? 'auto',
   });
@@ -135,23 +174,16 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   return {
     ipa,
     segments,
-    syllables: syllablesWithWhisper(segments, language, whisperSpans, analysis),
-    useModelWords: options.useModelWords,
+    syllables:
+      options.includeSyllables === false
+        ? []
+        : syllablesWithWhisper(segments, language, whisperSpans, analysis),
     nbest: [{ ipa, segments, cost: 0, confidence: 1 }],
-    words: decoded.words.map(({ word, lang, oov, tokens }, i) => ({
-      text: oov
-        ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
-        : word,
-      language: lang,
-      oov,
-      ...wordSpan(aligned, i),
-    })),
+    useModelWords: options.useModelWords,
+    words:
+      options.includeWords === false ? [] : timedWords(decoded.words, aligned),
     tracks: { pitch },
-    // Prosody uses its own hop. Mode measurements use the same 10 ms frames.
-    frames: options.frontEnd
-      ? analysis
-      : { energy: analysis.energy, count: analysis.count },
-    modeFrames: analysis,
+    ...resultFrames(analysis, options),
     whisperSpans,
     modes,
     language,
@@ -159,29 +191,50 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   };
 }
 
-function decodeSpeech(samples, sampleRate, analysis, options) {
-  const model = getHmmModel();
-  const network = getNetwork(model, options.languages, options);
-  const atModelRate = sampleRate === HMM_RATE;
-  const { feats, frames, pitch, tone } = hmmFeatures(
+function resultFrames(
+  analysis,
+  { frontEnd, useModelWords, includeModeFrames }
+) {
+  return {
+    // Batch callers need the energies here for the noise check.
+    frames: frontEnd
+      ? analysis
+      : { energy: analysis.energy, count: analysis.count },
+    // Live word decoding and batch mode classification can share analysis.
+    modeFrames: useModelWords || includeModeFrames ? analysis : undefined,
+  };
+}
+
+function hmmFrontEnd(samples, sampleRate, options) {
+  if (options.frontEnd) {
+    return {
+      analysis: options.frontEnd.frames,
+      pitch: options.frontEnd.tracks.pitch,
+    };
+  }
+  const analysis =
+    options.analysis ?? wordAnalysis(samples, sampleRate, options);
+  const pitch = options.framePitch
+    ? trackPitchFrames(
+        analysis,
+        { percentiles: true, kernels: options.kernels },
+        options.frameStorage
+      )
+    : trackPitch(analysis, { kernels: options.kernels });
+  return { analysis, pitch };
+}
+
+function wordAnalysis(samples, sampleRate, options) {
+  const { includeSyllables, includeModeFrames, frameStorage } = options;
+  if (includeSyllables !== false) {
+    return analyzeFrames(samples, sampleRate, { hop: 0.01 }, frameStorage);
+  }
+  return analyzeWordFrames(
     samples,
     sampleRate,
-    model.lda,
-    atModelRate ? analysis : undefined,
-    options.frontEnd?.tracks.pitch
+    frameStorage,
+    includeModeFrames
   );
-  const search = { ...options.search, tone };
-  const decoded = frames
-    ? decodeWords(network, feats, frames, search, options.workspaces)
-    : { words: [], lang: null };
-  // Words from the phone loop get their own tokens to take a stress.
-  decoded.words = decoded.words.map((w) =>
-    w.oov ? { ...w, tokens: w.tokens.map((t) => ({ ...t })) } : w
-  );
-  const aligned = decoded.words.length
-    ? alignWords(network, feats, frames, decoded.words, search)
-    : [];
-  return { decoded, aligned, pitch: atModelRate ? pitch : undefined };
 }
 
 function hasSpeech(analysis) {
@@ -193,17 +246,29 @@ function hasSpeech(analysis) {
   return false;
 }
 
-/** Start and end of word i: its first and last aligned phone. */
-function wordSpan(aligned, i) {
-  let from = Infinity;
-  let to = -Infinity;
-  for (const a of aligned) {
-    if (a.word === i && a.from < a.to) {
-      from = Math.min(from, a.from);
-      to = Math.max(to, a.to);
+/** The alignment lists each word's phones in order. */
+function timedWords(words, aligned) {
+  let next = 0;
+  return words.map(({ word, lang, oov, tokens }, index) => {
+    let from = Infinity;
+    let to = -Infinity;
+    while (aligned[next]?.word === index) {
+      const phone = aligned[next++];
+      if (phone.from < phone.to) {
+        from = Math.min(from, phone.from);
+        to = Math.max(to, phone.to);
+      }
     }
-  }
-  return { start: hmmBoundaryTime(from), end: hmmBoundaryTime(to) };
+    return {
+      text: oov
+        ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
+        : word,
+      language: lang,
+      ...(oov && { unknown: true }),
+      start: hmmBoundaryTime(from),
+      end: hmmBoundaryTime(to),
+    };
+  });
 }
 
 function whisperSpansOf(samples, sampleRate, analysis, pitch, { whisper }) {

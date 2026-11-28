@@ -16,6 +16,7 @@ import {
   f0Errors,
   fft,
   formantErrors,
+  formantTrack,
   logSpectralDistance,
   melCepstralDistortion,
   melFilterbank,
@@ -27,7 +28,16 @@ import {
   synthesize,
   tokenize,
 } from '../src/index.js';
-import { median } from '../src/analysis/voice-features.js';
+import {
+  decimate,
+  estimateFormants,
+  lpcCoefficients,
+  lpcEnvelope,
+} from '../src/acoustics/analysis.js';
+import { median, yinPitch } from '../src/analysis/voice-features.js';
+import { trimSilence } from '../src/metrics/compare.js';
+import { normalizeRms } from '../src/metrics/distortion.js';
+import { alignEdits } from '../src/metrics/text.js';
 
 function noise(seconds = 1, sampleRate = 16000) {
   const random = createRandom(1);
@@ -198,6 +208,19 @@ describe('metrics: dtw', () => {
     ]);
   });
 
+  it('traces both stretch directions across packed row boundaries', () => {
+    const a = [0, 0, 1, 2, 3];
+    const b = [0, 1, 1, 2, 3];
+    expect(dtw(a, b).path).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, 1],
+      [2, 2],
+      [3, 3],
+      [4, 4],
+    ]);
+  });
+
   it('dtw follows the signals with the symmetric weight', () => {
     // b is a delayed by one frame: with weight 1 a diagonal step costs one
     // local distance for two frames and the path stays on the diagonal;
@@ -273,6 +296,22 @@ describe('metrics: pitch and formants', () => {
     expect(median(errors) < 0.02).toBe(true);
   });
 
+  it('pads only the partial YIN windows without changing their pitch', () => {
+    const rate = 8000;
+    const samples = Float32Array.from({ length: 703 }, (_, i) =>
+      Math.sin((2 * Math.PI * i) / 40)
+    );
+    const track = pitchTrack(samples, rate);
+    const padded = new Float64Array(samples.length + 500);
+    padded.set(samples);
+    expect(track.length).toBe(9);
+    expect(track[5]).toBeGreaterThan(0);
+    for (let i = 0; i < track.length; i++) {
+      const { f0, aperiodicity } = yinPitch(padded, i * 80, 320, rate);
+      expect(track[i]).toBe(aperiodicity < 0.35 ? f0 : 0);
+    }
+  });
+
   it('formant errors average over frames with formants in both', () => {
     const result = formantErrors(
       [[500, 1500, 2500], null, [600, 1600, 2600]],
@@ -284,6 +323,63 @@ describe('metrics: pitch and formants', () => {
     expect(result.f2.hz).toBe(0);
     expect(result.f3.percent).toBe(4);
   });
+
+  it('finds the same formant peaks as a complete LPC envelope', () => {
+    for (const rate of [8000, 22050]) {
+      const samples = noise(0.04, rate);
+      const start = Math.floor(0.01 * rate);
+      const length = Math.floor(0.02 * rate);
+      const { samples: frame, sampleRate } = decimate(
+        samples.slice(start, start + length),
+        rate,
+        11025
+      );
+      for (let i = frame.length - 1; i > 0; i--) {
+        frame[i] -= 0.94 * frame[i - 1];
+      }
+      for (let i = 0; i < frame.length; i++) {
+        frame[i] *=
+          0.54 - 0.46 * Math.cos((2 * Math.PI * i) / (frame.length - 1));
+      }
+      const { frequencies, magnitudes } = lpcEnvelope(
+        lpcCoefficients(frame, 12),
+        sampleRate,
+        5
+      );
+      const peaks = Array.from(frequencies).filter(
+        (frequency, i) =>
+          frequency > 150 &&
+          magnitudes[i] > magnitudes[i - 1] &&
+          magnitudes[i] >= magnitudes[i + 1]
+      );
+      expect(peaks.length).toBeGreaterThan(3);
+      for (const count of [0, 3, 3.5, -1]) {
+        const args = { start: 0.01, duration: 0.02, count };
+        const expected = peaks.slice(0, count);
+        expect(estimateFormants(samples, rate, args)).toEqual(expected);
+        expect(estimateFormants(Array.from(samples), rate, args)).toEqual(
+          expected
+        );
+      }
+    }
+  });
+
+  it('reuses formant windows with the same results as isolated estimates', () => {
+    for (const rate of [8000, 22050]) {
+      const samples = noise(0.042, rate);
+      const pitch = [180, 175, 0, 173, 174, 0];
+      const expected = pitch.map((f0, i) =>
+        f0 > 0
+          ? estimateFormants(samples, rate, {
+              start: i * 0.01,
+              duration: 0.03,
+              count: 3,
+            })
+          : null
+      );
+      expect(formantTrack(samples, rate, { pitch })).toEqual(expected);
+    }
+  });
 });
 
 describe('metrics: transcripts', () => {
@@ -293,6 +389,59 @@ describe('metrics: transcripts', () => {
     expect(result.substitutions).toBe(2);
     expect(result.insertions).toBe(1);
     expect(result.deletions).toBe(0);
+  });
+
+  it('counts edits along the same path as alignment, including ties', () => {
+    const sequences = ['', 'a', 'b', 'ab', 'ba', 'aa', 'aba', 'aabb', 'bbaa'];
+    for (const reference of sequences) {
+      for (const hypothesis of sequences) {
+        const { distance, substitutions, deletions, insertions } = alignEdits(
+          reference,
+          hypothesis
+        );
+        expect(editDistance(reference, hypothesis)).toEqual({
+          distance,
+          substitutions,
+          deletions,
+          insertions,
+        });
+      }
+    }
+  });
+
+  it('traces all edit directions and prefers substitutions when tied', () => {
+    expect(alignEdits('abxyc', 'abydc')).toEqual({
+      distance: 2,
+      substitutions: 2,
+      insertions: 0,
+      deletions: 0,
+      pairs: [
+        [0, 0],
+        [1, 1],
+        [2, 2],
+        [3, 3],
+        [4, 4],
+      ],
+    });
+    expect(alignEdits('abxyc', 'bxyz')).toEqual({
+      distance: 2,
+      substitutions: 1,
+      insertions: 0,
+      deletions: 1,
+      pairs: [
+        [1, 0],
+        [2, 1],
+        [3, 2],
+        [4, 3],
+      ],
+    });
+    expect(alignEdits('', 'a')).toEqual({
+      distance: 1,
+      substitutions: 0,
+      insertions: 1,
+      deletions: 0,
+      pairs: [],
+    });
   });
 
   it('word error rate', () => {
@@ -345,5 +494,37 @@ describe('metrics: compareRecordings', () => {
     expect(result.f0.rmseCents > 300).toBe(true);
     expect(Number.isFinite(result.lsd)).toBe(true);
     expect(Number.isFinite(result.timing.rmsSeconds)).toBe(true);
+  });
+
+  it('scores the same power frames and cepstra along the alignment', () => {
+    const sampleRate = 8000;
+    const a = new Float32Array(2400);
+    const b = new Float32Array(2100);
+    a.set(noise(0.18, sampleRate), 320);
+    b.set(noise(0.16, sampleRate), 160);
+    const settings = { window: 0.02, hop: 0.008, range: 32, band: 0.5 };
+    const r = normalizeRms(trimSilence(a, sampleRate, settings));
+    const t = normalizeRms(trimSilence(b, sampleRate, settings));
+    const shortCepstra = (samples) =>
+      mfcc(samples, sampleRate, settings).map((c) => c.subarray(1));
+    const { path } = dtw(shortCepstra(r), shortCepstra(t), settings);
+    const along = { ...settings, path, normalize: false };
+    const result = compareRecordings(
+      { samples: a, sampleRate },
+      { samples: b, sampleRate },
+      { ...settings, formants: false }
+    );
+    expect(result.lsd).toBe(logSpectralDistance(r, t, sampleRate, along));
+    expect(result.mcd).toBe(melCepstralDistortion(r, t, sampleRate, along));
+    const short = { samples: a.subarray(0, 720), sampleRate };
+    const self = compareRecordings(short, short, { formants: false });
+    expect(self.lsd).toBe(0);
+    expect(self.mcd).toBe(0);
+    const repeated = compareRecordings(
+      { samples: a, sampleRate },
+      { samples: b, sampleRate },
+      { ...settings, formants: false }
+    );
+    expect(repeated).toEqual(result);
   });
 });

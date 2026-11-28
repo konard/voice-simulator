@@ -6,6 +6,7 @@ import {
   lexiconRevision,
   lexiconWords,
   registeredLexicons,
+  scanShippedLexicon,
   userPronunciations,
 } from '../g2p/lexicon.js';
 import { hanziToPinyin } from '../g2p/chinese.js';
@@ -18,6 +19,7 @@ import {
 } from '../g2p/russian-clitics.js';
 import { getCounts } from './data/index.js';
 import { checkLanguage, pronounce } from './languages.js';
+import { buildLexiconTrie } from './lexicon-trie.js';
 
 const cached = new Map();
 let readPreparedLexicon;
@@ -151,7 +153,9 @@ export function addPronunciation(root, entry, language, parsed) {
   }
 }
 
-function* lexiconPronunciations(language, words, selectTokens) {
+const withoutPauses = (tokens) => tokens.filter((t) => t.kind !== 'pause');
+
+function* lexiconPronunciations(language, words, selectTokens = withoutPauses) {
   const contextual = language === 'zh' ? contextualChinese() : new Map();
   const parsed = new Map();
   for (const { word, count, prior } of words) {
@@ -176,8 +180,13 @@ function* lexiconPronunciations(language, words, selectTokens) {
         continue;
       }
       if (!parsed.has(ipa)) {
-        const tokens = parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause');
-        parsed.set(ipa, selectTokens ? selectTokens(tokens) : tokens);
+        // Most readings are visited once. Bound reuse without retaining the
+        // full set of parsed segment objects during trie construction.
+        if (parsed.size === 1024) {
+          parsed.clear();
+        }
+        const tokens = parseIpa(ipa).tokens;
+        parsed.set(ipa, selectTokens(tokens));
       }
       const tokens = parsed.get(ipa);
       if (tokens.length) {
@@ -197,25 +206,21 @@ export function getLexicon(language = 'en') {
     cached.get(language).revision !== lexiconRevision()
   ) {
     const data = getCounts(language);
-    let root;
     let prepared;
     cached.set(language, {
       get prepared() {
-        return this.revision === 0
-          ? (prepared ??= readPreparedLexicon?.(language, data.words) ?? false)
-          : false;
+        prepared ??=
+          (this.revision === 0 &&
+            readPreparedLexicon?.(language, data.ranked)) ||
+          (language === 'en'
+            ? scanShippedLexicon(language, () =>
+                buildLexiconTrie(this, language)
+              )
+            : buildLexiconTrie(this, language));
+        return prepared;
       },
       get root() {
-        if (this.prepared) {
-          return this.prepared.root;
-        }
-        if (!root) {
-          root = trieNode();
-          for (const { tokens, ...entry } of this.pronunciations()) {
-            addPronunciation(root, entry, language, tokens);
-          }
-        }
-        return root;
+        return this.prepared.root;
       },
       /** Pronunciations of all words, or of the `limit` most frequent. */
       pronunciations(limit = data.words.length, selectTokens) {
@@ -238,13 +243,17 @@ export function getLexicon(language = 'en') {
         rank = 1000,
         selectTokens
       ) {
+        const dictionaries = registeredLexicons();
+        if (!dictionaries.some(([lang]) => lang === language)) {
+          return [];
+        }
         const known = new Set(
           data.words.slice(0, limit).map(({ word }) => word)
         );
         const count =
           data.words[Math.min(rank, data.words.length - 1)]?.count ?? 1;
         const added = new Set();
-        for (const [lang, entries] of registeredLexicons()) {
+        for (const [lang, entries] of dictionaries) {
           if (lang === language) {
             for (const word of Object.keys(entries)) {
               if (!known.has(word)) {
@@ -259,12 +268,20 @@ export function getLexicon(language = 'en') {
           selectTokens
         );
       },
-      words: data.words,
-      counts: data.counts,
+      ranked: data.ranked,
+      get words() {
+        return data.words;
+      },
+      wordCount: data.wordCount,
+      get counts() {
+        return data.counts;
+      },
       get bigrams() {
         return data.bigrams;
       },
       transitionRow: data.transitionRow,
+      transitionCost: data.transitionCost,
+      transitionCostAt: data.transitionCostAt,
       total: data.total,
       revision: lexiconRevision(),
     });

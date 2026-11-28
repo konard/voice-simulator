@@ -10,7 +10,11 @@ import {
   span,
   voicedBetween,
 } from './prosody-features.js';
-import { levelDb, averageSpectrum } from '../analysis/mode-features.js';
+import {
+  levelDb,
+  averageSpectrum,
+  createAverageSpectrumWorkspace,
+} from '../analysis/mode-features.js';
 import { parseIpa } from '../ipa/parse.js';
 import { DIPHTHONGS } from '../ipa/syllables.js';
 import { TONE_CONTOURS } from '../g2p/pinyin.js';
@@ -27,8 +31,14 @@ const TONES = Object.values(TONE_CONTOURS).map((letters) => [
   Array.from(letters, (letter) => LETTERS.indexOf(letter) + 1),
 ]);
 const PAUSE = 0.2;
-function balanceDb(samples, rate, from, to) {
-  const { power, binWidth } = averageSpectrum(samples, rate, from, to);
+function balanceDb(samples, rate, from, to, spectrum) {
+  const { power, binWidth } = averageSpectrum(
+    samples,
+    rate,
+    from,
+    to,
+    spectrum
+  );
   const split = Math.min(power.length, Math.ceil(500 / binWidth));
   let high = 0;
   let low = 0;
@@ -241,11 +251,12 @@ function measureWhisperNucleus(
 
 function measureNuclei(
   nuclei,
-  { samples, sampleRate, pitch, range, voice, frames, whisperSpans }
+  { samples, sampleRate, pitch, range, voice, getFrames, whisperSpans }
 ) {
   const parts = nuclei.flatMap((nucleus) => nucleus.parts);
   const inWhisper = ({ start, end }) =>
     Boolean(whisperAt(whisperSpans, (start + end) / 2));
+  const spectrum = createAverageSpectrumWorkspace(sampleRate);
   const rows = parts.map(({ start, end }) => {
     const from = start * sampleRate;
     const to = end * sampleRate;
@@ -253,7 +264,7 @@ function measureNuclei(
     return [
       end - start,
       levelDb(samples, from, to),
-      balanceDb(samples, sampleRate, from, to),
+      balanceDb(samples, sampleRate, from, to, spectrum),
       voiced.reduce((highest, value) => Math.max(highest, value), -Infinity),
     ];
   });
@@ -275,7 +286,13 @@ function measureNuclei(
   nuclei.forEach((nucleus, i) => {
     const { parts, sound, end, syllableEnd, group } = nucleus;
     if (inWhisper(sound)) {
-      measureWhisperNucleus(nucleus, frames, meanDuration, measured, scores);
+      measureWhisperNucleus(
+        nucleus,
+        getFrames(),
+        meanDuration,
+        measured,
+        scores
+      );
       previous = undefined;
       return;
     }
@@ -323,11 +340,15 @@ function measureNuclei(
 
 /** Analyze the vowel sounds of a timed IPA decoding. Times are in seconds. */
 export function measureProsody(samples, sampleRate, sounds, options = {}) {
-  let frames = options.frames;
-  const analysis = () => (frames ??= analyzeFrames(samples, sampleRate));
-  const track = options.pitch ?? trackPitch(analysis());
+  // The HMM already supplies a pitch track and whisper spans. Its fine
+  // grid is needed only if a recognised nucleus falls inside a whisper.
+  let frames;
+  const getFrames = () =>
+    (frames ??= options.frames ?? analyzeFrames(samples, sampleRate));
+  const track = options.pitch ?? trackPitch(getFrames());
   const whisperSpans =
-    options.whisperSpans ?? findWhisper(samples, sampleRate, analysis(), track);
+    options.whisperSpans ??
+    findWhisper(samples, sampleRate, getFrames(), track);
   const voice = options.voice?.head ?? options.voice;
   const voicePitch = voice?.pitch;
   const median =
@@ -361,7 +382,7 @@ export function measureProsody(samples, sampleRate, sounds, options = {}) {
     pitch,
     range,
     voice,
-    frames: whisperSpans.length ? analysis() : frames,
+    getFrames,
     whisperSpans,
   });
   return {

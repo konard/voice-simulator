@@ -172,7 +172,7 @@ function decodeFormat(view, offset, size) {
  * @param {Uint8Array} bytes
  * @returns {{sampleRate: number, samples: Float32Array, channels: number, bitDepth: number, float: boolean}}
  */
-export function decodeWav(bytes) {
+export function decodeWav(bytes, _maxSeconds, allocate) {
   if (readTag(bytes, 0) !== 'RIFF' || readTag(bytes, 8) !== 'WAVE') {
     throw new Error('Not a WAV file');
   }
@@ -193,7 +193,7 @@ export function decodeWav(bytes) {
       const { channels, sampleRate, format } = fmt;
       return {
         sampleRate,
-        samples: decodeSamples(bytes, body, length, channels, format),
+        samples: decodeSamples(bytes, body, length, channels, format, allocate),
         channels,
         bitDepth: format.bitDepth,
         float: format.kind === 'float',
